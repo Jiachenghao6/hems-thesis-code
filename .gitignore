@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+*.log
+logs/
+experiment_log*.json
+.DS_Store
+.vite/
