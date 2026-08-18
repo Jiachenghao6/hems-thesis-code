@@ -5,8 +5,15 @@
  *   Condition A — Trade-off Slider + Interactive Causal Explanations (updates with slider)
  *   Condition B — Trade-off Slider + Static SHAP feature-importance chart (fixed)
  *
- * Condition can be toggled via URL param:  ?condition=A  or  ?condition=B
- * Default: A
+ * Condition is currently taken from the URL param ?condition=A|B.
+ * TODO (before the study): replace with server-side block randomisation via
+ * /api/session, so assignment is random and balanced across the two groups.
+ * See AB_COMPARABILITY.md §5.1 P4 in the thesis repo.
+ *
+ * Comparability (supervisor feedback 2026-06-16): nothing in the shared UI may
+ * reveal which condition a participant is in, or that conditions exist at all.
+ * The condition badge, the banner describing the manipulation, and the exposed
+ * participant id / log-export link were removed for this reason.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Condition, ScenarioId, SliderValues, PricePoint, Recommendation, ScenarioMeta } from "./types";
@@ -174,16 +181,6 @@ export default function App() {
           </span>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <span
-            style={{
-              padding: "3px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-              background: condition === "A" ? "#eff6ff" : "#fdf4ff",
-              color: condition === "A" ? "#2563eb" : "#9333ea",
-              border: `1.5px solid ${condition === "A" ? "#bfdbfe" : "#e9d5ff"}`,
-            }}
-          >
-            Condition {condition}: {condition === "A" ? "Interactive Causal" : "Static SHAP"}
-          </span>
           <select
             value={scenario}
             onChange={(e) => setScenario(e.target.value as ScenarioId)}
@@ -228,19 +225,6 @@ export default function App() {
         <section style={{ marginBottom: 16 }}>
           <TradeoffSlider values={sliders} onChange={handleSliderChange} disabled={loading} />
         </section>
-
-        {/* Condition explanation banner */}
-        <div style={{
-          fontSize: 12, color: "#64748b", marginBottom: 16,
-          padding: "8px 14px",
-          background: condition === "A" ? "#eff6ff" : "#fdf4ff",
-          borderRadius: 8,
-          border: `1px solid ${condition === "A" ? "#bfdbfe" : "#e9d5ff"}`,
-        }}>
-          {condition === "A"
-            ? "💡 Condition A: Each explanation updates in real time as you move the sliders — showing why the system makes each recommendation given your current priorities."
-            : "📊 Condition B: SHAP feature-importance charts are generated at the time of recommendation and do not change when you move the sliders."}
-        </div>
 
         {/* Loading */}
         {loading && (
@@ -292,12 +276,7 @@ export default function App() {
 
         {/* Footer */}
         <div style={{ marginTop: 36, textAlign: "center", fontSize: 11, color: "#94a3b8" }}>
-          HEMS Demo · TUM Bachelor Thesis · Jiacheng Hao · 2026
-          {" · "}pid: <code style={{ fontSize: 10 }}>{participantId}</code>
-          {" · "}
-          <a href="http://localhost:8000/api/log/export" target="_blank" rel="noreferrer" style={{ color: "#94a3b8" }}>
-            Export log ↗
-          </a>
+          Home Energy Management System
         </div>
       </main>
     </div>

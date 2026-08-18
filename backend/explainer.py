@@ -72,11 +72,30 @@ def generate_causal_explanation(
         )
     elif dominant == "green":
         pct = round(w_green * 100)
-        sentence1 = (
-            f"With your Green priority at {pct}%, the system targets {_fmt_hour(rec_start)}–{_fmt_hour(rec_end)}, "
-            f"a window when low wholesale prices ({avg_price:.1f} €/MWh) indicate high "
-            f"renewable generation — minimising the carbon footprint of your {app}."
-        )
+        # Use the *measured* renewable share, not price as a proxy. The optimiser was
+        # changed in Session 7 to score "green" from real ENTSO-E generation data; this
+        # explanation previously still told participants that low prices indicate high
+        # renewable generation, which no longer matches how the system actually decides.
+        rec_renew = rec.get("renewable_share_recommended")
+        def_renew = rec.get("renewable_share_default")
+
+        if rec_renew is not None:
+            share_txt = f"{rec_renew * 100:.0f}% of the electricity in that window comes from wind, solar and hydro"
+            if def_renew is not None and rec_renew > def_renew:
+                share_txt += f", against {def_renew * 100:.0f}% at your usual {_fmt_hour(def_start)} slot"
+            sentence1 = (
+                f"With your Green priority at {pct}%, the system targets "
+                f"{_fmt_hour(rec_start)}–{_fmt_hour(rec_end)}, because {share_txt} — "
+                f"the cleanest window available for your {app}."
+            )
+        else:
+            # Renewable data unavailable for this scenario; state the basis honestly
+            # rather than inventing a renewable claim.
+            sentence1 = (
+                f"With your Green priority at {pct}%, the system targets "
+                f"{_fmt_hour(rec_start)}–{_fmt_hour(rec_end)} for your {app}, "
+                f"the lowest-demand window available in today's data."
+            )
     else:  # convenience dominant
         pct = round(w_conv * 100)
         if rec_start == def_start:

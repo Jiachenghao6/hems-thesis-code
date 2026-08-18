@@ -1,7 +1,15 @@
 /**
  * TradeoffSlider.tsx
- * Three independent sliders (0–100 each) for Cost / Green / Convenience.
- * Internal weights are normalised to sum=1 when sent to the API.
+ * Three trade-off sliders (Cost / Green / Convenience) constrained to sum to 100%.
+ *
+ * Rationale (supervisor feedback, 2026-06-16): with three independent 0–100 sliders
+ * the percentage wording does not fit — the values could sum to 300%. A constrained
+ * sum also matches the "trade-off" semantics: raising one priority must cost another.
+ *
+ * Redistribution rule: when one slider moves to `v`, the remaining budget (100 − v)
+ * is split across the other two *in proportion to their current values*, so the user's
+ * existing balance between them is preserved. If both are at 0, the budget is split evenly.
+ * Rounding error is absorbed by the larger of the two so the total is always exactly 100.
  */
 import type { SliderValues } from "../types";
 
@@ -11,142 +19,100 @@ interface Props {
   disabled?: boolean;
 }
 
+type Key = keyof SliderValues;
+
 interface SliderCfg {
-  key: keyof SliderValues;
+  key: Key;
   label: string;
   emoji: string;
-  color: string;
-  trackColor: string;
   description: string;
 }
 
 const SLIDERS: SliderCfg[] = [
-  {
-    key: "cost",
-    label: "Cost",
-    emoji: "💶",
-    color: "#2563eb",
-    trackColor: "#dbeafe",
-    description: "Shift appliances to cheapest hours",
-  },
-  {
-    key: "green",
-    label: "Green",
-    emoji: "🌱",
-    color: "#16a34a",
-    trackColor: "#dcfce7",
-    description: "Favour high renewable-energy windows",
-  },
-  {
-    key: "convenience",
-    label: "Convenience",
-    emoji: "⏰",
-    color: "#d97706",
-    trackColor: "#fef3c7",
-    description: "Stay close to your usual routine",
-  },
+  { key: "cost",        label: "Cost",        emoji: "💶", description: "Shift appliances to cheapest hours" },
+  { key: "green",       label: "Green",       emoji: "🌱", description: "Favour high renewable-energy windows" },
+  { key: "convenience", label: "Convenience", emoji: "⏰", description: "Stay close to your usual routine" },
 ];
 
-function normalise(v: SliderValues): { cost: number; green: number; convenience: number } {
-  const total = v.cost + v.green + v.convenience;
-  if (total === 0) return { cost: 0.33, green: 0.33, convenience: 0.34 };
-  return {
-    cost: Math.round((v.cost / total) * 100),
-    green: Math.round((v.green / total) * 100),
-    convenience: Math.round((v.convenience / total) * 100),
-  };
+/**
+ * Move `moved` to `target` and redistribute the remaining budget across the other
+ * two keys proportionally. Guarantees the three values are integers summing to 100.
+ */
+export function redistribute(values: SliderValues, moved: Key, target: number): SliderValues {
+  const v = Math.max(0, Math.min(100, Math.round(target)));
+  const others = (["cost", "green", "convenience"] as Key[]).filter((k) => k !== moved);
+  const [a, b] = others;
+  const budget = 100 - v;
+  const otherSum = values[a] + values[b];
+
+  let va: number;
+  if (otherSum === 0) {
+    va = Math.round(budget / 2);
+  } else {
+    va = Math.round((values[a] / otherSum) * budget);
+  }
+  va = Math.max(0, Math.min(budget, va));
+  const vb = budget - va;
+
+  return { ...values, [moved]: v, [a]: va, [b]: vb } as SliderValues;
 }
 
 export default function TradeoffSlider({ values, onChange, disabled }: Props) {
-  const pct = normalise(values);
-
-  const handleReset = () => onChange({ cost: 33, green: 33, convenience: 34 });
+  const total = values.cost + values.green + values.convenience;
 
   return (
-    <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 12, padding: "18px 20px" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600, color: "#1e293b" }}>
-          Trade-off Preferences
-        </h3>
-        <button
-          onClick={handleReset}
-          disabled={disabled}
-          style={{
-            fontSize: 12, padding: "3px 10px", border: "1px solid #cbd5e1",
-            borderRadius: 6, background: "white", cursor: "pointer", color: "#475569",
-          }}
-        >
-          Reset
-        </button>
+    <div
+      style={{
+        background: "white",
+        border: "1px solid #e2e8f0",
+        borderRadius: 12,
+        padding: "16px 18px",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+        <h2 style={{ margin: 0, fontSize: 14, fontWeight: 600, color: "#1e293b" }}>
+          ⚖️ Your Priorities
+        </h2>
+        <span style={{ fontSize: 12, color: total === 100 ? "#94a3b8" : "#dc2626", fontWeight: 600 }}>
+          {total}% of 100%
+        </span>
       </div>
+      <p style={{ margin: "0 0 14px", fontSize: 12, color: "#64748b" }}>
+        These three always add up to 100%. Giving more weight to one priority takes weight away from the others.
+      </p>
 
-      {SLIDERS.map((cfg) => {
-        const val = values[cfg.key];
-        const effectivePct = pct[cfg.key];
-        return (
-          <div key={cfg.key} style={{ marginBottom: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-              <span style={{ fontWeight: 500, fontSize: 14, color: "#334155" }}>
-                {cfg.emoji} {cfg.label}
-                <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: 12, marginLeft: 8 }}>
-                  {cfg.description}
-                </span>
-              </span>
-              <span style={{ fontWeight: 700, fontSize: 13, color: cfg.color, minWidth: 38, textAlign: "right" }}>
-                {effectivePct}%
-              </span>
-            </div>
-            <div style={{ position: "relative", height: 8 }}>
-              {/* Track */}
-              <div style={{ position: "absolute", top: 2, left: 0, right: 0, height: 4, borderRadius: 2, background: cfg.trackColor }} />
-              {/* Fill */}
-              <div
-                style={{
-                  position: "absolute", top: 2, left: 0, height: 4, borderRadius: 2,
-                  background: cfg.color, width: `${val}%`, transition: "width 0.1s",
-                }}
-              />
-              <input
-                type="range"
-                min={0}
-                max={100}
-                value={val}
-                disabled={disabled}
-                onChange={(e) => onChange({ ...values, [cfg.key]: Number(e.target.value) })}
-                style={{
-                  position: "absolute", top: 0, left: 0, width: "100%", height: 8,
-                  opacity: 0, cursor: disabled ? "not-allowed" : "pointer", margin: 0,
-                }}
-              />
-              {/* Thumb visual */}
-              <div
-                style={{
-                  position: "absolute", top: -3, left: `calc(${val}% - 7px)`,
-                  width: 14, height: 14, borderRadius: "50%", background: cfg.color,
-                  border: "2px solid white", boxShadow: "0 1px 3px rgba(0,0,0,.25)",
-                  pointerEvents: "none", transition: "left 0.1s",
-                }}
-              />
-            </div>
-          </div>
-        );
-      })}
-
-      {/* Visual weight breakdown bar */}
-      <div style={{ marginTop: 8 }}>
-        <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden" }}>
-          <div style={{ width: `${pct.cost}%`, background: "#2563eb", transition: "width 0.2s" }} />
-          <div style={{ width: `${pct.green}%`, background: "#16a34a", transition: "width 0.2s" }} />
-          <div style={{ width: `${pct.convenience}%`, background: "#d97706", transition: "width 0.2s" }} />
-        </div>
-        <div style={{ display: "flex", gap: 12, marginTop: 5, justifyContent: "center" }}>
-          {SLIDERS.map((cfg) => (
-            <span key={cfg.key} style={{ fontSize: 11, color: cfg.color }}>
-              {cfg.emoji} {cfg.label} {pct[cfg.key]}%
+      {SLIDERS.map((cfg) => (
+        <div key={cfg.key} style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+            <label htmlFor={`slider-${cfg.key}`} style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>
+              <span aria-hidden="true" style={{ marginRight: 6 }}>{cfg.emoji}</span>
+              {cfg.label}
+            </label>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#334155", fontVariantNumeric: "tabular-nums" }}>
+              {values[cfg.key]}%
             </span>
-          ))}
+          </div>
+
+          <input
+            id={`slider-${cfg.key}`}
+            type="range"
+            min={0}
+            max={100}
+            step={1}
+            value={values[cfg.key]}
+            disabled={disabled}
+            aria-label={`${cfg.label} priority, ${values[cfg.key]} percent`}
+            onChange={(e) => onChange(redistribute(values, cfg.key, Number(e.target.value)))}
+            style={{
+              width: "100%",
+              accentColor: "#475569",
+              cursor: disabled ? "not-allowed" : "pointer",
+            }}
+          />
+
+          <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 2 }}>{cfg.description}</div>
         </div>
-      </div>
+      ))}
     </div>
   );
 }

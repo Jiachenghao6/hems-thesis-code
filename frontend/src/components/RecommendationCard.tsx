@@ -124,30 +124,49 @@ export default function RecommendationCard({ rec, condition, onAccept, onReject 
         )}
       </div>
 
-      {/* Explanation (condition-dependent) */}
-      {condition === "A" && rec.explanation && (
-        <div
-          style={{
-            background: "#eff6ff",
-            border: "1px solid #bfdbfe",
-            borderRadius: 8,
-            padding: "10px 13px",
-            fontSize: 13,
-            color: "#1e40af",
-            lineHeight: 1.55,
-            marginBottom: 14,
-          }}
-        >
-          <span style={{ fontWeight: 600, marginRight: 6 }}>💡</span>
-          {rec.explanation}
-        </div>
-      )}
+      {/*
+        Explanation panel — identical container for both conditions.
 
-      {condition === "B" && rec.shap_data && (
-        <div style={{ marginBottom: 14 }}>
-          <ShapChart features={rec.shap_data} />
+        Comparability requirement (supervisor feedback 2026-06-16): the two conditions
+        must differ only in the explanation itself, not in how prominently it is
+        presented. Same background, border, padding, heading and minimum height are
+        therefore used for A and B; only the contents of the panel differ. All
+        decision-relevant facts (times, prices, savings) live in the shared block
+        above, so neither group has information the other lacks.
+      */}
+      <div
+        style={{
+          background: "#f8fafc",
+          border: "1px solid #e2e8f0",
+          borderRadius: 8,
+          padding: "10px 13px",
+          marginBottom: 14,
+          minHeight: 96,
+        }}
+      >
+        <div style={{ fontSize: 11, fontWeight: 600, color: "#64748b", marginBottom: 6, letterSpacing: 0.2 }}>
+          WHY THIS TIME
         </div>
-      )}
+
+        {condition === "A" && rec.explanation && (
+          <div style={{ fontSize: 13, color: "#334155", lineHeight: 1.55 }}>{rec.explanation}</div>
+        )}
+
+        {condition === "B" && rec.shap_data && (
+          <>
+            <ShapChart features={rec.shap_data} />
+            {/*
+              Neutral reading aid. Without it the chart is not readable to a lay
+              participant, and the study would measure "cannot read a bar chart"
+              rather than "static explanation". It adds no information that
+              condition A receives — it only states how to read the figure.
+            */}
+            <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 6, lineHeight: 1.5 }}>
+              Longer bars indicate factors that weighed more heavily in this recommendation.
+            </div>
+          </>
+        )}
+      </div>
 
       {/* Accept / Reject buttons */}
       {!decision && (
