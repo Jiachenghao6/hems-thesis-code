@@ -4,6 +4,8 @@ FastAPI backend serving:
   GET  /api/prices/{scenario}   — fetch 24-hour price curve
   POST /api/recommend           — run optimizer + generate explanation
   POST /api/log                 — write experiment event to JSONL file
+  POST /api/session             — assign condition + task sequence (block randomised)
+  GET  /api/session/summary     — researcher-only assignment progress
   GET  /health                  — uptime check
 
 Run with:
@@ -24,6 +26,7 @@ from pydantic import BaseModel, Field
 from price_service import fetch_live_prices, get_scenario_prices, SCENARIO_META, fetch_live_renewable, get_scenario_renewable
 from optimizer import optimize_schedule, APPLIANCES
 from explainer import generate_causal_explanation, generate_shap_data
+from session_service import assign_session, assignment_summary, TASK_SEQUENCE
 
 # ── App setup ────────────────────────────────────────────────────────────────
 
@@ -54,6 +57,10 @@ class RecommendRequest(BaseModel):
     condition: str = Field(default="A", description="Experiment condition: A (causal) | B (SHAP)")
 
 
+class SessionRequest(BaseModel):
+    prolific_pid: str = Field(default="", description="Prolific ID, stored only in the assignment ledger")
+
+
 class LogEvent(BaseModel):
     participant_id: str = Field(default="anon", description="Prolific participant ID or 'anon'")
     condition: str = Field(default="A", description="A or B")
@@ -70,6 +77,28 @@ class LogEvent(BaseModel):
 @app.get("/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+@app.post("/api/session")
+async def create_session(req: SessionRequest):
+    """
+    Assign one participant to a condition and return the fixed task sequence.
+
+    Condition assignment moved server-side (supervisor feedback 2026-06-16): it was
+    previously a URL parameter defaulting to A, which was neither random nor balanced
+    and was visible to the participant. Assignment now uses block randomisation so the
+    two groups stay equal in size as recruitment proceeds.
+
+    The response deliberately does NOT describe what the condition means — the client
+    only needs the letter to pick which explanation component to render.
+    """
+    return assign_session(req.prolific_pid or None)
+
+
+@app.get("/api/session/summary")
+async def session_summary():
+    """Recruitment progress. For the researcher — not linked from the participant UI."""
+    return {**assignment_summary(), "task_sequence": list(TASK_SEQUENCE)}
 
 
 @app.get("/api/scenarios")

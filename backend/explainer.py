@@ -104,11 +104,25 @@ def generate_causal_explanation(
                 f"at your usual {_fmt_hour(def_start)} slot — no change to your routine."
             )
         else:
-            sentence1 = (
-                f"With your Convenience priority at {pct}%, the system moves your {app} "
-                f"only slightly — from your usual {_fmt_hour(def_start)} to {_fmt_hour(rec_start)}, "
-                f"preserving as much of your routine as possible."
-            )
+            # "only slightly" was hard-coded, so a five-hour shift was described as slight.
+            # An explanation that misdescribes what the system did is worse than no
+            # explanation: it gives participants a reason to distrust everything else on
+            # the screen, and that distrust would land in the trust scale as noise.
+            shift = abs(rec_start - def_start)
+            shift = min(shift, 24 - shift)          # wrap around midnight
+            if shift <= 1:
+                magnitude = f"by {shift} hour" if shift == 1 else "barely at all"
+                sentence1 = (
+                    f"With your Convenience priority at {pct}%, the system moves your {app} "
+                    f"{magnitude} — from your usual {_fmt_hour(def_start)} to {_fmt_hour(rec_start)}, "
+                    f"keeping close to your routine."
+                )
+            else:
+                sentence1 = (
+                    f"With your Convenience priority at {pct}%, the system still moves your {app} "
+                    f"by {shift} hours — from your usual {_fmt_hour(def_start)} to {_fmt_hour(rec_start)} — "
+                    f"because the saving over that window outweighs the change to your routine."
+                )
 
     # ── Sentence 2: counterfactual ────────────────────────────────────────
     cheapest = _cheapest_slot(prices, dur)

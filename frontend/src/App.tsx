@@ -5,33 +5,50 @@
  *   Condition A — Trade-off Slider + Interactive Causal Explanations (updates with slider)
  *   Condition B — Trade-off Slider + Static SHAP feature-importance chart (fixed)
  *
- * Condition is currently taken from the URL param ?condition=A|B.
- * TODO (before the study): replace with server-side block randomisation via
- * /api/session, so assignment is random and balanced across the two groups.
- * See AB_COMPARABILITY.md §5.1 P4 in the thesis repo.
+ * Comparability (supervisor feedback 2026-06-16). Three things follow from it:
  *
- * Comparability (supervisor feedback 2026-06-16): nothing in the shared UI may
- * reveal which condition a participant is in, or that conditions exist at all.
- * The condition badge, the banner describing the manipulation, and the exposed
- * participant id / log-export link were removed for this reason.
+ *  1. Condition is assigned by the server (/api/session, block randomised) — not by
+ *     a URL parameter the participant can see or change, and not defaulting to A.
+ *  2. The scenario sequence is fixed and identical for both groups. Participants do
+ *     not pick scenarios, and the `live` scenario is excluded from the study, since
+ *     it would show a different price curve on every day of data collection.
+ *  3. Nothing in the shared UI reveals which condition a participant is in, or that
+ *     conditions exist at all. The condition badge, the banner describing the
+ *     manipulation, and the exposed participant id / log-export link were removed.
+ *
+ * `?mode=demo` restores free exploration for screenshots and live demos.
+ *
+ * TODO (W3–W4): consent page, task advancement through the sequence, NASA-TLX and
+ * trust questionnaires, manipulation-check item.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Condition, ScenarioId, SliderValues, PricePoint, Recommendation, ScenarioMeta } from "./types";
-import { getPrices, getRecommendations, getScenarios, logEvent } from "./api";
+import type { SessionInfo } from "./api";
+import { createSession, getPrices, getRecommendations, getScenarios, logEvent } from "./api";
 import PriceCurve from "./components/PriceCurve";
 import TradeoffSlider from "./components/TradeoffSlider";
 import RecommendationCard from "./components/RecommendationCard";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-function getConditionFromURL(): Condition {
-  const p = new URLSearchParams(window.location.search).get("condition");
-  return p === "B" ? "B" : "A";
+/**
+ * Study mode is the default. `?mode=demo` gives the old free-exploration build,
+ * which is what the walkthrough screenshots and live demos use — it must never be
+ * the URL handed to participants.
+ */
+function isDemoMode(): boolean {
+  return new URLSearchParams(window.location.search).get("mode") === "demo";
 }
 
-function getParticipantId(): string {
-  const p = new URLSearchParams(window.location.search).get("pid");
-  return p || "demo-" + Math.random().toString(36).slice(2, 8);
+/** Prolific appends PROLIFIC_PID to the study URL. Empty outside Prolific. */
+function getProlificPid(): string {
+  const q = new URLSearchParams(window.location.search);
+  return q.get("PROLIFIC_PID") || q.get("prolific_pid") || "";
+}
+
+/** Demo mode only — study mode gets its condition from the server. */
+function getDemoCondition(): Condition {
+  return new URLSearchParams(window.location.search).get("condition") === "B" ? "B" : "A";
 }
 
 const DEFAULT_SLIDERS: SliderValues = { cost: 33, green: 33, convenience: 34 };
@@ -48,8 +65,19 @@ const SCENARIO_OPTIONS: { id: ScenarioId; short: string }[] = [
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function App() {
-  const condition = getConditionFromURL();
-  const participantId = getParticipantId();
+  const demoMode = isDemoMode();
+
+  // In study mode both of these arrive from /api/session; until they do, nothing
+  // is rendered, so a participant can never see a condition the server did not assign.
+  const [session, setSession] = useState<SessionInfo | null>(
+    demoMode
+      ? { participant_id: "demo", condition: getDemoCondition(), task_sequence: ["S3"] }
+      : null
+  );
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  const condition: Condition = session?.condition ?? "A";
+  const participantId = session?.participant_id ?? "pending";
 
   const [scenario, setScenario] = useState<ScenarioId>("S3");
   const [sliders, setSliders] = useState<SliderValues>(DEFAULT_SLIDERS);
@@ -91,6 +119,27 @@ export default function App() {
     [condition]
   );
 
+  // Ask the server for a condition and the task sequence (study mode only).
+  // Runs once; demo mode already has a synthetic session.
+  useEffect(() => {
+    if (demoMode) return;
+    let cancelled = false;
+    createSession(getProlificPid())
+      .then((s) => {
+        if (cancelled) return;
+        setSession(s);
+        // First task of the fixed sequence. Falls back to S3 only if the server
+        // ever returns an empty sequence, which would be a deployment error.
+        setScenario((s.task_sequence[0] as ScenarioId) ?? "S3");
+      })
+      .catch((e) => {
+        if (!cancelled) setSessionError((e as Error).message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode]);
+
   // Load scenario metadata once
   useEffect(() => {
     getScenarios()
@@ -103,19 +152,32 @@ export default function App() {
     fetchPrices(scenario);
   }, [scenario, fetchPrices]);
 
-  // Fetch recommendations on mount
+  // Fetch recommendations once a condition is known. Waiting on `session` matters:
+  // firing before assignment would render condition A to everyone for a moment.
   useEffect(() => {
+    if (!session) return;
     fetchRecommendations(sliders, scenario);
     logEvent({ participant_id: participantId, condition, event_type: "page_load", scenario });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session]);
 
-  // Re-fetch recommendations when scenario changes
+  // Re-fetch recommendations when the scenario changes.
+  // `loggedScenario` suppresses the spurious first run: in study mode the scenario is
+  // set from the task sequence the moment the session arrives, which would otherwise
+  // be recorded as a scenario_change the participant never made.
+  const loggedScenario = useRef<string | null>(null);
   useEffect(() => {
+    if (!session) return;
+    if (loggedScenario.current === null) {
+      loggedScenario.current = scenario;
+      return;
+    }
+    if (loggedScenario.current === scenario) return;
+    loggedScenario.current = scenario;
     fetchRecommendations(sliders, scenario);
     logEvent({ participant_id: participantId, condition, event_type: "scenario_change", scenario });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scenario]);
+  }, [scenario, session]);
 
   // Debounced re-fetch when sliders change
   const handleSliderChange = (next: SliderValues) => {
@@ -159,6 +221,31 @@ export default function App() {
 
   // ── Render ───────────────────────────────────────────────────────────────
 
+  // Nothing is rendered before the condition is known. Showing a default condition
+  // first and swapping it after assignment would expose some participants to both.
+  if (!session) {
+    return (
+      <div
+        style={{
+          fontFamily: "'Inter', system-ui, sans-serif",
+          background: "#f8fafc",
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: sessionError ? "#dc2626" : "#64748b",
+          fontSize: 14,
+          padding: 24,
+          textAlign: "center",
+        }}
+      >
+        {sessionError
+          ? `The study could not be started: ${sessionError}. Please return the submission on Prolific so you are not penalised, and accept our apologies.`
+          : "Preparing your session…"}
+      </div>
+    );
+  }
+
   return (
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", background: "#f8fafc", minHeight: "100vh" }}>
       {/* ── Header ── */}
@@ -180,20 +267,28 @@ export default function App() {
             Home Energy Management · European Day-Ahead Prices
           </span>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <select
-            value={scenario}
-            onChange={(e) => setScenario(e.target.value as ScenarioId)}
-            style={{
-              fontSize: 12, padding: "4px 8px", border: "1px solid #e2e8f0",
-              borderRadius: 6, background: "white", color: "#334155", cursor: "pointer",
-            }}
-          >
-            {SCENARIO_OPTIONS.map((s) => (
-              <option key={s.id} value={s.id}>{s.short}</option>
-            ))}
-          </select>
-        </div>
+        {/*
+          Scenario picker is demo-only. During the study every participant works
+          through the same fixed sequence, so the price data both groups see is
+          identical; letting them choose would make the two groups incomparable.
+        */}
+        {demoMode && (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <select
+              value={scenario}
+              onChange={(e) => setScenario(e.target.value as ScenarioId)}
+              aria-label="Price scenario"
+              style={{
+                fontSize: 12, padding: "4px 8px", border: "1px solid #e2e8f0",
+                borderRadius: 6, background: "white", color: "#334155", cursor: "pointer",
+              }}
+            >
+              {SCENARIO_OPTIONS.map((s) => (
+                <option key={s.id} value={s.id}>{s.short}</option>
+              ))}
+            </select>
+          </div>
+        )}
       </header>
 
       <main style={{ maxWidth: 800, margin: "0 auto", padding: "20px 16px 48px" }}>

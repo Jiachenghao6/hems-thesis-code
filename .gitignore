@@ -12,3 +12,4 @@ experiment_log*.json
 .DS_Store
 .vite/
 experiment_log*
+assignments.jsonl

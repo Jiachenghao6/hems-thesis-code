@@ -23,8 +23,16 @@ export default function ShapChart({ features }: Props) {
 
   return (
     <div>
-      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10, fontStyle: "italic" }}>
-        Feature importance (SHAP) — fixed at recommendation time
+      {/*
+        This label used to read "Feature importance (SHAP) — fixed at recommendation
+        time". That told condition-B participants their explanation would not update,
+        which is precisely the manipulation and must not be disclosed — the same reason
+        the condition badge and banner were removed from App.tsx. It also used jargon
+        ("SHAP") that condition A never encounters, adding a comprehension asymmetry on
+        top of the intended contrast.
+      */}
+      <div style={{ fontSize: 12, color: "#64748b", marginBottom: 10 }}>
+        What influenced this recommendation
       </div>
       <svg
         viewBox={`0 0 ${CHART_W} ${totalH}`}

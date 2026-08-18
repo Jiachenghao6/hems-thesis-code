@@ -15,7 +15,9 @@ interface Props {
 }
 
 function fmtHour(h: number): string {
-  return `${h.toString().padStart(2, "0")}:00`;
+  // Wrap past midnight. A four-hour EV charge starting at 22:00 was rendering as
+  // "22:00 – 26:00"; participants reading that would reasonably doubt the whole system.
+  return `${(((h % 24) + 24) % 24).toString().padStart(2, "0")}:00`;
 }
 
 function fmtPrice(p: number): string {
