@@ -3,18 +3,48 @@ price_service.py
 Fetches day-ahead electricity prices.
 
 Primary source:  ENTSO-E Transparency Platform REST API
-                 Token: REDACTED
+                 Token: read at runtime from ENTSOE_TOKEN (env var, else
+                 the ENTSOE_TOKEN= line in D:/Claude/.env). Never hard-coded.
                  Access granted: 2026-05-15
 Fallback 1:      aWATTar DE API (free, no key required)
 Fallback 2:      Five hard-coded historical/synthetic scenario datasets
 """
+
+import os
 
 import httpx
 from datetime import datetime, timezone, timedelta
 from xml.etree import ElementTree as ET
 
 # ── API config ──────────────────────────────────────────────────────────────
-ENTSOE_TOKEN = "REDACTED"
+# ENTSO-E token is never hard-coded. It is read at import time from the
+# ENTSOE_TOKEN environment variable, else from the ENTSOE_TOKEN= line in
+# D:\Claude\.env (same convention as scripts/notion.py; no dotenv dependency).
+ENV_PATH = r"D:\Claude\.env"
+
+
+def _load_entsoe_token() -> str:
+    """Return the ENTSO-E token, or "" if it is not configured.
+
+    Returning "" rather than exiting is deliberate: an unauthenticated request
+    fails, and fetch_live_prices() / fetch_live_renewable() then fall through to
+    aWATTar and the scenario datasets. A missing token degrades the demo, it
+    does not crash the backend.
+    """
+    token = os.environ.get("ENTSOE_TOKEN", "").strip()
+    if token:
+        return token
+    try:
+        with open(ENV_PATH, encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("ENTSOE_TOKEN="):
+                    return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
+ENTSOE_TOKEN = _load_entsoe_token()
 ENTSOE_BASE  = "https://web-api.tp.entsoe.eu/api"
 AWATTAR_URL  = "https://api.awattar.de/v1/marketdata"
 
