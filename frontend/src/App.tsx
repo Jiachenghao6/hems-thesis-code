@@ -20,7 +20,7 @@
  *
  * ── Study phases ───────────────────────────────────────────────────────────
  *
- *   consent → tasks → survey → done
+ *   consent → tutorial → (situation → task) × 3 → survey → done
  *
  * Consent comes first for a reason that is easy to get wrong: asking the server
  * for a session assigns a condition and writes a row to the assignment ledger,
@@ -36,11 +36,12 @@ import TradeoffSlider from "./components/TradeoffSlider";
 import RecommendationCard from "./components/RecommendationCard";
 import Consent from "./study/Consent";
 import Tutorial from "./study/Tutorial";
+import Situation, { FRAMINGS } from "./study/Situation";
 import Survey from "./study/Survey";
 import type { SurveyAnswers } from "./study/Survey";
 import Done from "./study/Done";
 
-type Phase = "consent" | "tutorial" | "tasks" | "survey" | "done";
+type Phase = "consent" | "tutorial" | "situation" | "tasks" | "survey" | "done";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -107,6 +108,9 @@ export default function App() {
   const phaseEnteredAt = useRef(performance.now());
   const consentMs = useRef<number | null>(null);
 
+  /** Guards the session request against re-running on every phase change. */
+  const sessionRequested = useRef(false);
+
   const condition: Condition = session?.condition ?? "A";
   const participantId = session?.participant_id ?? "pending";
 
@@ -156,6 +160,13 @@ export default function App() {
     if (demoMode) return;
     // Not before consent: assignment writes a ledger row, which is data collection.
     if (phase === "consent") return;
+    // Exactly once. `phase` has to be a dependency for the gate above to release,
+    // but without this guard the effect re-runs on EVERY phase change and resets
+    // the scenario to task_sequence[0] — which silently showed all three tasks the
+    // same day. The participant then works through what looks like the identical
+    // task three times, and their engagement falls off a cliff.
+    if (sessionRequested.current) return;
+    sessionRequested.current = true;
     let cancelled = false;
     createSession(getProlificPid())
       .then((s) => {
@@ -279,6 +290,7 @@ export default function App() {
     setTaskIndex(next);
     setSliders(DEFAULT_SLIDERS);
     setScenario((session?.task_sequence[next] as ScenarioId) ?? scenario);
+    setPhase("situation");
     window.scrollTo({ top: 0 });
   };
 
@@ -335,8 +347,21 @@ export default function App() {
             },
           });
           phaseEnteredAt.current = performance.now();
-          setPhase("tasks");
+          setPhase("situation");
         }}
+      />
+    );
+  }
+
+  // Each task is introduced by its own card. Without it the three tasks look
+  // interchangeable and participants stop engaging after the first — see Situation.tsx.
+  if (phase === "situation") {
+    return (
+      <Situation
+        scenarioId={scenario}
+        index={taskIndex}
+        total={taskCount || 3}
+        onContinue={() => setPhase("tasks")}
       />
     );
   }
@@ -424,7 +449,23 @@ export default function App() {
       <main style={{ maxWidth: 800, margin: "0 auto", padding: "20px 16px 48px" }}>
 
         {/* Scenario description banner */}
-        {currentMeta && (
+        {/*
+          Study mode gets the plain-language framing the situation card used, so the
+          participant keeps a handle on which day this is. Demo mode keeps the market
+          metadata, which is what the walkthrough screenshots need but is jargon to a
+          participant — and names a real date the study does not claim to reproduce.
+        */}
+        {!demoMode && FRAMINGS[scenario] && (
+          <div style={{
+            background: "white", border: "1px solid #e2e8f0", borderRadius: 10,
+            padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#475569",
+          }}>
+            <strong style={{ color: "#1e293b" }}>
+              Situation {taskIndex + 1} of {taskCount}: {FRAMINGS[scenario].title}
+            </strong>
+          </div>
+        )}
+        {demoMode && currentMeta && (
           <div style={{
             background: "white", border: "1px solid #e2e8f0", borderRadius: 10,
             padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#475569",
