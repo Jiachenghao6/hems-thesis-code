@@ -111,6 +111,14 @@ export default function App() {
   /** Guards the session request against re-running on every phase change. */
   const sessionRequested = useRef(false);
 
+  /**
+   * Accept/reject per appliance, for the CURRENT situation only, cleared when the
+   * situation changes. It lives here rather than inside each card because the cards
+   * are keyed by appliance id, which repeats across situations — local state there
+   * survived the change and left later situations looking already answered.
+   */
+  const [decisions, setDecisions] = useState<Record<string, "accepted" | "rejected">>({});
+
   const condition: Condition = session?.condition ?? "A";
   const participantId = session?.participant_id ?? "pending";
 
@@ -240,6 +248,7 @@ export default function App() {
   };
 
   const handleAccept = (applianceId: string) => {
+    setDecisions((d) => ({ ...d, [applianceId]: "accepted" }));
     logEvent({
       participant_id: participantId,
       condition,
@@ -251,6 +260,7 @@ export default function App() {
   };
 
   const handleReject = (applianceId: string) => {
+    setDecisions((d) => ({ ...d, [applianceId]: "rejected" }));
     logEvent({
       participant_id: participantId,
       condition,
@@ -272,7 +282,17 @@ export default function App() {
    * so every task begins from the same state for everyone; carrying the previous
    * setting over would make the later tasks depend on the earlier ones.
    */
+  /**
+   * Every appliance in the situation must be decided before moving on. Acceptance
+   * rate is the study's primary dependent variable, and a skipped appliance is not
+   * a rejection — it is a hole in the data that cannot be interpreted either way.
+   * The cost is a few seconds per situation; the alternative is missing data on the
+   * one measure the study exists to produce.
+   */
+  const undecided = recommendations.filter((r) => !decisions[r.appliance_id]).length;
+
   const advanceTask = () => {
+    if (undecided > 0) return;
     logEvent({
       participant_id: participantId,
       condition,
@@ -289,6 +309,7 @@ export default function App() {
     const next = taskIndex + 1;
     setTaskIndex(next);
     setSliders(DEFAULT_SLIDERS);
+    setDecisions({});
     setScenario((session?.task_sequence[next] as ScenarioId) ?? scenario);
     setPhase("situation");
     window.scrollTo({ top: 0 });
@@ -532,6 +553,7 @@ export default function App() {
                   key={rec.appliance_id}
                   rec={rec}
                   condition={condition}
+                  decision={decisions[rec.appliance_id] ?? null}
                   onAccept={handleAccept}
                   onReject={handleReject}
                 />
@@ -563,21 +585,24 @@ export default function App() {
           >
             <div style={{ fontSize: 13, color: "#64748b" }}>
               Situation {taskIndex + 1} of {taskCount}
-              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
-                When you are done with this situation, continue.
+              <div style={{ fontSize: 12, color: undecided > 0 ? "#b45309" : "#94a3b8", marginTop: 3 }}>
+                {undecided > 0
+                  ? `Please accept or reject the remaining ${undecided} ${undecided === 1 ? "suggestion" : "suggestions"}.`
+                  : "When you are done with this situation, continue."}
               </div>
             </div>
             <button
               onClick={advanceTask}
+              disabled={undecided > 0}
               style={{
-                background: "#2563eb",
+                background: undecided > 0 ? "#cbd5e1" : "#2563eb",
                 color: "white",
                 border: "none",
                 borderRadius: 8,
                 padding: "11px 24px",
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: undecided > 0 ? "not-allowed" : "pointer",
               }}
             >
               {isLastTask ? "Continue to the questions" : "Next situation"}

@@ -2,14 +2,22 @@
  * RecommendationCard.tsx
  * Single appliance recommendation with accept/reject buttons.
  * Renders either the causal explanation (Group A) or SHAP chart (Group B).
+ *
+ * The accept/reject decision is owned by App, not by this card. It used to be local
+ * state, and because the card is keyed by appliance id — which repeats across the
+ * three situations — the component was never remounted when the situation changed.
+ * Participants arrived at situation two to find all four appliances already marked
+ * decided, with no buttons left to press, and the acceptance rate for two thirds of
+ * the study was silently never collected.
  */
-import { useState } from "react";
 import type { Recommendation, Condition } from "../types";
 import ShapChart from "./ShapChart";
 
 interface Props {
   rec: Recommendation;
   condition: Condition;
+  /** Current decision for this appliance in this situation; null until made. */
+  decision: "accepted" | "rejected" | null;
   onAccept: (applianceId: string) => void;
   onReject: (applianceId: string) => void;
 }
@@ -30,21 +38,12 @@ function savingsColor(eur: number): string {
   return "#64748b";
 }
 
-export default function RecommendationCard({ rec, condition, onAccept, onReject }: Props) {
-  const [decision, setDecision] = useState<"accepted" | "rejected" | null>(null);
-
+export default function RecommendationCard({ rec, condition, decision, onAccept, onReject }: Props) {
   const isShifted = rec.recommended_start !== rec.default_start;
   const savings = rec.savings_eur;
 
-  const handleAccept = () => {
-    setDecision("accepted");
-    onAccept(rec.appliance_id);
-  };
-
-  const handleReject = () => {
-    setDecision("rejected");
-    onReject(rec.appliance_id);
-  };
+  const handleAccept = () => onAccept(rec.appliance_id);
+  const handleReject = () => onReject(rec.appliance_id);
 
   return (
     <div
