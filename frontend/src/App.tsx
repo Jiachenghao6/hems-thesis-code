@@ -35,11 +35,12 @@ import PriceCurve from "./components/PriceCurve";
 import TradeoffSlider from "./components/TradeoffSlider";
 import RecommendationCard from "./components/RecommendationCard";
 import Consent from "./study/Consent";
+import Tutorial from "./study/Tutorial";
 import Survey from "./study/Survey";
 import type { SurveyAnswers } from "./study/Survey";
 import Done from "./study/Done";
 
-type Phase = "consent" | "tasks" | "survey" | "done";
+type Phase = "consent" | "tutorial" | "tasks" | "survey" | "done";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -293,7 +294,13 @@ export default function App() {
   // ── Phase routing ────────────────────────────────────────────────────────
 
   if (phase === "consent") {
-    return <Consent onAccept={() => setPhase("tasks")} />;
+    return <Consent onAccept={() => setPhase("tutorial")} />;
+  }
+
+  // The session is requested the moment consent is given, so the assignment
+  // arrives while the tutorial is being read and task one starts without a wait.
+  if (phase === "tutorial") {
+    return <Tutorial onStart={() => setPhase("tasks")} />;
   }
 
   if (phase === "survey") {

@@ -272,15 +272,75 @@ export const CHECK_ITEMS: ChoiceItem[] = [
 /** The single correct response to the attention check, kept next to the item. */
 export const ATTENTION_CHECK_CORRECT = "2";
 
-// ── Open questions ──────────────────────────────────────────────────────────
+// ── Closing questions ───────────────────────────────────────────────────────
 
-export const OPEN_ITEMS = [
+/**
+ * Two closed items plus one short required open item, replacing the two optional
+ * free-text questions.
+ *
+ * Why the change: optional prose is the first thing a paid participant skips, and
+ * what does arrive is uneven. Closed items are answered by everyone and can be
+ * counted without a coding pass. But closing both questions would have thrown away
+ * the only place in the quantitative arm where a participant can say something the
+ * study did not anticipate, so one open item stays — required, and framed as a
+ * single sentence so the cost of answering is low enough not to invite "n/a".
+ *
+ * **Every option below has to be endorsable in both conditions.** This is the same
+ * hazard as the condition badge that was removed from the interface: an option only
+ * one group could plausibly tick (say, "the explanation changed as I moved the
+ * control") tells the other group that a different version of the system exists.
+ * Free text can never leak that; a list of options can. So the wording stays at a
+ * level both a sentence-based and a chart-based explanation satisfy.
+ */
+export interface ClosedItem {
+  id: string;
+  text: string;
+  hint?: string;
+  options: { value: string; label: string }[];
+  /** Multi-select when set; single choice otherwise. */
+  maxChoices?: number;
+  /** Option value that reveals a free-text box and requires it to be filled. */
+  otherValue?: string;
+  /** Option value that cannot be combined with any other (a "none of these"). */
+  exclusiveValue?: string;
+}
+
+export const CLOSING_ITEMS: ClosedItem[] = [
   {
-    id: "open_trust",
-    text: "In one or two sentences: what made you trust — or not trust — the recommendations?",
+    id: "why_decide",
+    text: "What played a part when you accepted or rejected the suggestions?",
+    hint: "Choose up to two.",
+    maxChoices: 2,
+    otherValue: "other",
+    exclusiveValue: "nothing",
+    options: [
+      { value: "reasoning_clear", label: "The reasoning behind the suggested time was clear to me" },
+      { value: "matched_priorities", label: "I could see how the suggestion related to the priorities I had set" },
+      { value: "saving_worth_it", label: "The saving looked worth it" },
+      { value: "close_to_own", label: "The suggested time was close to what I would have chosen anyway" },
+      { value: "figures_plausible", label: "The prices and figures looked plausible" },
+      { value: "nothing", label: "Nothing in particular" },
+      { value: "other", label: "Something else" },
+    ],
   },
   {
-    id: "open_confusing",
-    text: "Was there anything about the explanations you found confusing?",
+    id: "what_confused",
+    text: "Was anything about the explanation confusing?",
+    otherValue: "other",
+    options: [
+      { value: "nothing", label: "No, it was clear" },
+      { value: "numbers", label: "The numbers" },
+      { value: "wording", label: "The way it was worded or labelled" },
+      { value: "why_that_time", label: "Why it picked that particular time" },
+      { value: "too_little", label: "There was too little information" },
+      { value: "other", label: "Something else" },
+    ],
   },
 ];
+
+/** One required open item. Kept short on purpose — see the note above. */
+export const OPEN_ITEM = {
+  id: "open_trust",
+  text: "In one sentence: what made you trust — or not trust — the recommendations?",
+  placeholder: "One sentence is enough.",
+};

@@ -24,8 +24,9 @@
 import { useState } from "react";
 import {
   CHECK_ITEMS,
+  CLOSING_ITEMS,
   DEMOGRAPHIC_ITEMS,
-  OPEN_ITEMS,
+  OPEN_ITEM,
   TIA_ITEMS,
   TIA_LABELS,
   TIA_PAGE_BREAK,
@@ -33,9 +34,10 @@ import {
   TLX_STEPS,
   TLX_STEP_SIZE,
 } from "./items";
-import { LikertRow, OpenQuestion, RadioQuestion, SurveyPage, TlxScale } from "./ui";
+import { ChoiceQuestion, LikertRow, OpenQuestion, RadioQuestion, SurveyPage, TlxScale } from "./ui";
 
-export type SurveyAnswers = Record<string, string | number>;
+/** Multi-select answers are stored as arrays; everything else stays scalar. */
+export type SurveyAnswers = Record<string, string | number | string[]>;
 
 const TOTAL_PAGES = 5;
 
@@ -51,9 +53,32 @@ export default function Survey({
   const [answers, setAnswers] = useState<SurveyAnswers>({});
   const [showMissing, setShowMissing] = useState(false);
 
-  const set = (id: string, v: string | number) => setAnswers((a) => ({ ...a, [id]: v }));
+  const set = (id: string, v: string | number | string[]) => setAnswers((a) => ({ ...a, [id]: v }));
   const num = (id: string) => answers[id] as number | undefined;
   const str = (id: string) => answers[id] as string | undefined;
+  const arr = (id: string) => (answers[id] as string[] | undefined) ?? [];
+  const txt = (id: string) => (answers[id] as string | undefined) ?? "";
+
+  /**
+   * Ids on the closing page whose emptiness is not simply `undefined`: a choice
+   * item is unanswered when nothing is selected, and an "other" selection is
+   * unanswered until the box beside it says what "other" was.
+   */
+  const closingMissing = (): string[] => {
+    const missing: string[] = [];
+    for (const item of CLOSING_ITEMS) {
+      const picked = arr(item.id);
+      if (picked.length === 0) {
+        missing.push(item.id);
+        continue;
+      }
+      if (item.otherValue && picked.includes(item.otherValue) && txt(item.id + "_other").trim() === "") {
+        missing.push(item.id);
+      }
+    }
+    if (txt(OPEN_ITEM.id).trim() === "") missing.push(OPEN_ITEM.id);
+    return missing;
+  };
 
   /** Advance only when every required id on the page has an answer. */
   const advance = (pageName: string, requiredIds: string[]) => {
@@ -171,28 +196,31 @@ export default function Survey({
     );
   }
 
-  // ── Page 5 · Checks and open questions ────────────────────────────────────
+  // ── Page 5 · Checks, closing questions, one open item ─────────────────────
 
   const checkIds = CHECK_ITEMS.map((c) => c.id);
+  const missingHere = [...checkIds.filter((id) => answers[id] === undefined), ...closingMissing()];
+
   return (
     <SurveyPage
       title="Two last things"
       intro="Please answer from memory — there is no need to be exact."
       progress={[5, TOTAL_PAGES]}
-      missing={countMissing(checkIds)}
+      missing={showMissing ? missingHere.length : 0}
       nextLabel="Finish and return to Prolific"
       onNext={() => {
-        const missing = checkIds.filter((id) => answers[id] === undefined);
-        if (missing.length > 0) {
+        if (missingHere.length > 0) {
           setShowMissing(true);
-          document.querySelector(`[name="${missing[0]}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+          const first = missingHere[0];
+          const el =
+            document.querySelector(`[name="${first}"]`) ??
+            document.querySelector(`[data-q="${first}"]`) ??
+            document.getElementById(first);
+          el?.scrollIntoView({ block: "center", behavior: "smooth" });
           return;
         }
-        // Open questions are optional on purpose: forcing prose produces "n/a".
-        const final: SurveyAnswers = { ...answers };
-        for (const o of OPEN_ITEMS) if (final[o.id] === undefined) final[o.id] = "";
-        onPageComplete("checks", final);
-        onFinish(final);
+        onPageComplete("checks", answers);
+        onFinish(answers);
       }}
     >
       {CHECK_ITEMS.map((q) => (
@@ -208,18 +236,33 @@ export default function Survey({
       ))}
 
       <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "26px 0 22px" }} />
-      <p style={{ fontSize: 13, color: "#64748b", marginTop: 0, marginBottom: 18 }}>
-        Optional — but very helpful:
-      </p>
-      {OPEN_ITEMS.map((o) => (
-        <OpenQuestion
-          key={o.id}
-          id={o.id}
-          text={o.text}
-          value={(answers[o.id] as string) ?? ""}
-          onChange={(v) => set(o.id, v)}
+
+      {CLOSING_ITEMS.map((item) => (
+        <ChoiceQuestion
+          key={item.id}
+          id={item.id}
+          text={item.text}
+          hint={item.hint}
+          options={item.options}
+          maxChoices={item.maxChoices}
+          otherValue={item.otherValue}
+          exclusiveValue={item.exclusiveValue}
+          value={arr(item.id)}
+          otherText={txt(item.id + "_other")}
+          onChange={(next) => set(item.id, next)}
+          onOtherText={(v) => set(item.id + "_other", v)}
+          showMissing={showMissing}
         />
       ))}
+
+      <OpenQuestion
+        id={OPEN_ITEM.id}
+        text={OPEN_ITEM.text}
+        placeholder={OPEN_ITEM.placeholder}
+        value={txt(OPEN_ITEM.id)}
+        onChange={(v) => set(OPEN_ITEM.id, v)}
+        showMissing={showMissing && txt(OPEN_ITEM.id).trim() === ""}
+      />
     </SurveyPage>
   );
 }

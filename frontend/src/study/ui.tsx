@@ -148,6 +148,139 @@ export function RadioQuestion({
   );
 }
 
+// ── Closed question, single or multi-select, with an optional "other" box ───
+
+/**
+ * One component for both shapes because the only real difference is how many
+ * answers may stand at once, and keeping them together stops the two drifting
+ * apart in look — which would make the two closing items read as different kinds
+ * of question when they are not.
+ *
+ * At the choice limit the remaining options are disabled rather than silently
+ * ignoring the click: a control that does nothing when pressed reads as broken.
+ */
+export function ChoiceQuestion({
+  id,
+  text,
+  hint,
+  options,
+  maxChoices,
+  otherValue,
+  exclusiveValue,
+  value,
+  otherText,
+  onChange,
+  onOtherText,
+  showMissing,
+}: {
+  id: string;
+  text: string;
+  hint?: string;
+  options: { value: string; label: string }[];
+  maxChoices?: number;
+  otherValue?: string;
+  exclusiveValue?: string;
+  value: string[];
+  otherText: string;
+  onChange: (next: string[]) => void;
+  onOtherText: (v: string) => void;
+  showMissing: boolean;
+}) {
+  const multi = (maxChoices ?? 1) > 1;
+  const otherPicked = otherValue !== undefined && value.includes(otherValue);
+  const unanswered = showMissing && (value.length === 0 || (otherPicked && otherText.trim() === ""));
+  const atLimit = multi && value.length >= (maxChoices as number);
+
+  const toggle = (v: string) => {
+    if (!multi) {
+      onChange([v]);
+      return;
+    }
+    if (value.includes(v)) {
+      onChange(value.filter((x) => x !== v));
+      return;
+    }
+    // "Nothing in particular" cannot sit alongside a reason, in either direction.
+    if (exclusiveValue !== undefined) {
+      if (v === exclusiveValue) {
+        onChange([v]);
+        return;
+      }
+      if (value.includes(exclusiveValue)) {
+        onChange([v]);
+        return;
+      }
+    }
+    if (value.length >= (maxChoices as number)) return;
+    onChange([...value, v]);
+  };
+
+  return (
+    <fieldset
+      style={{
+        border: "none",
+        borderLeft: `3px solid ${unanswered ? MISS : "transparent"}`,
+        padding: "0 0 0 12px",
+        margin: "0 0 24px",
+      }}
+      data-q={id}
+    >
+      <legend style={{ fontSize: 14, fontWeight: 500, padding: 0, marginBottom: hint ? 4 : 10 }}>{text}</legend>
+      {hint && <div style={{ fontSize: 13, color: MUTED, marginBottom: 10 }}>{hint}</div>}
+      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+        {options.map((o) => {
+          const on = value.includes(o.value);
+          const blocked = !on && atLimit && o.value !== exclusiveValue;
+          return (
+            <label
+              key={o.value}
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 9,
+                fontSize: 14,
+                lineHeight: 1.45,
+                cursor: blocked ? "not-allowed" : "pointer",
+                color: blocked ? "#94a3b8" : "inherit",
+              }}
+            >
+              <input
+                type={multi ? "checkbox" : "radio"}
+                name={id}
+                checked={on}
+                disabled={blocked}
+                onChange={() => toggle(o.value)}
+                style={{ accentColor: ACCENT, width: 16, height: 16, marginTop: 2, flex: "none" }}
+              />
+              {o.label}
+            </label>
+          );
+        })}
+      </div>
+
+      {otherPicked && (
+        <input
+          type="text"
+          value={otherText}
+          onChange={(e) => onOtherText(e.target.value)}
+          placeholder="Please say briefly what it was"
+          aria-label="Please say briefly what it was"
+          style={{
+            marginTop: 10,
+            width: "100%",
+            boxSizing: "border-box",
+            border: `1px solid ${otherText.trim() === "" && showMissing ? MISS : LINE}`,
+            borderRadius: 8,
+            padding: "9px 11px",
+            fontSize: 14,
+            fontFamily: "inherit",
+          }}
+        />
+      )}
+    </fieldset>
+  );
+}
+
 // ── Likert matrix row (TiA) ─────────────────────────────────────────────────
 
 export function LikertRow({
@@ -313,14 +446,25 @@ export function OpenQuestion({
   text,
   value,
   onChange,
+  placeholder,
+  showMissing,
 }: {
   id: string;
   text: string;
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
+  showMissing?: boolean;
 }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div
+      data-q={id}
+      style={{
+        marginBottom: 24,
+        borderLeft: `3px solid ${showMissing ? MISS : "transparent"}`,
+        paddingLeft: 12,
+      }}
+    >
       <label htmlFor={id} style={{ display: "block", fontSize: 14, fontWeight: 500, marginBottom: 9 }}>
         {text}
       </label>
@@ -329,10 +473,11 @@ export function OpenQuestion({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={3}
+        placeholder={placeholder}
         style={{
           width: "100%",
           boxSizing: "border-box",
-          border: `1px solid ${LINE}`,
+          border: `1px solid ${showMissing ? MISS : LINE}`,
           borderRadius: 8,
           padding: 11,
           fontSize: 14,

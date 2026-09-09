@@ -120,7 +120,8 @@ export async function submitSurvey(payload: {
   participant_id: string;
   condition: Condition;
   page: string;
-  answers: Record<string, string | number>;
+  /** Multi-select items store an array; the rest are scalars. */
+  answers: Record<string, string | number | string[]>;
 }): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
