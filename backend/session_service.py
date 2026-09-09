@@ -21,7 +21,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
 
-ASSIGNMENT_LOG = Path(__file__).parent / "assignments.jsonl"
+from storage import data_file
+
+ASSIGNMENT_LOG = data_file("assignments.jsonl")
 
 BLOCK_SIZE = 4          # 每 4 人一个区组：2A + 2B
 CONDITIONS = ("A", "B")

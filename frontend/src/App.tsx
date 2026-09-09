@@ -18,16 +18,28 @@
  *
  * `?mode=demo` restores free exploration for screenshots and live demos.
  *
- * TODO (W3–W4): consent page, task advancement through the sequence, NASA-TLX and
- * trust questionnaires, manipulation-check item.
+ * ── Study phases ───────────────────────────────────────────────────────────
+ *
+ *   consent → tasks → survey → done
+ *
+ * Consent comes first for a reason that is easy to get wrong: asking the server
+ * for a session assigns a condition and writes a row to the assignment ledger,
+ * and that is already data collection. So `createSession` is not called until
+ * consent has been given. Demo mode skips straight to the tasks.
  */
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Condition, ScenarioId, SliderValues, PricePoint, Recommendation, ScenarioMeta } from "./types";
 import type { SessionInfo } from "./api";
-import { createSession, getPrices, getRecommendations, getScenarios, logEvent } from "./api";
+import { createSession, getPrices, getRecommendations, getScenarios, logEvent, submitSurvey } from "./api";
 import PriceCurve from "./components/PriceCurve";
 import TradeoffSlider from "./components/TradeoffSlider";
 import RecommendationCard from "./components/RecommendationCard";
+import Consent from "./study/Consent";
+import Survey from "./study/Survey";
+import type { SurveyAnswers } from "./study/Survey";
+import Done from "./study/Done";
+
+type Phase = "consent" | "tasks" | "survey" | "done";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,6 +88,10 @@ export default function App() {
   );
   const [sessionError, setSessionError] = useState<string | null>(null);
 
+  const [phase, setPhase] = useState<Phase>(demoMode ? "tasks" : "consent");
+  const [taskIndex, setTaskIndex] = useState(0);
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "failed">("saving");
+
   const condition: Condition = session?.condition ?? "A";
   const participantId = session?.participant_id ?? "pending";
 
@@ -123,6 +139,8 @@ export default function App() {
   // Runs once; demo mode already has a synthetic session.
   useEffect(() => {
     if (demoMode) return;
+    // Not before consent: assignment writes a ledger row, which is data collection.
+    if (phase === "consent") return;
     let cancelled = false;
     createSession(getProlificPid())
       .then((s) => {
@@ -138,7 +156,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [demoMode]);
+  }, [demoMode, phase]);
 
   // Load scenario metadata once
   useEffect(() => {
@@ -217,7 +235,74 @@ export default function App() {
     });
   };
 
+  // ── Task sequence ────────────────────────────────────────────────────────
+
+  const taskCount = session?.task_sequence.length ?? 0;
+  const isLastTask = taskIndex >= taskCount - 1;
+
+  /**
+   * Move to the next scenario in the fixed sequence, or hand over to the
+   * questionnaire. Sliders are reset to the neutral starting point between tasks
+   * so every task begins from the same state for everyone; carrying the previous
+   * setting over would make the later tasks depend on the earlier ones.
+   */
+  const advanceTask = () => {
+    logEvent({
+      participant_id: participantId,
+      condition,
+      event_type: "task_complete",
+      scenario,
+      slider_values: sliders,
+      extra: { task_index: taskIndex },
+    });
+    if (isLastTask) {
+      setPhase("survey");
+      window.scrollTo({ top: 0 });
+      return;
+    }
+    const next = taskIndex + 1;
+    setTaskIndex(next);
+    setSliders(DEFAULT_SLIDERS);
+    setScenario((session?.task_sequence[next] as ScenarioId) ?? scenario);
+    window.scrollTo({ top: 0 });
+  };
+
+  // ── Questionnaire ────────────────────────────────────────────────────────
+
+  /** Fire-and-forget per page; the final page decides whether the code is shown. */
+  const handleSurveyPage = (page: string, answers: SurveyAnswers) => {
+    submitSurvey({ participant_id: participantId, condition, page, answers }).catch(() => {
+      // Swallowed on purpose: an intermediate page failing must not stop someone
+      // mid-questionnaire. The full answer set is retried once at the end.
+    });
+  };
+
+  const handleSurveyFinish = (all: SurveyAnswers) => {
+    setPhase("done");
+    setSaveStatus("saving");
+    window.scrollTo({ top: 0 });
+    // One final write of everything. This is the attempt that gates the completion
+    // code, so its outcome is shown to the participant rather than swallowed.
+    submitSurvey({ participant_id: participantId, condition, page: "checks", answers: all })
+      .then(() => setSaveStatus("saved"))
+      .catch(() => setSaveStatus("failed"));
+  };
+
   const currentMeta = scenarioMeta.find((m) => m.id === scenario);
+
+  // ── Phase routing ────────────────────────────────────────────────────────
+
+  if (phase === "consent") {
+    return <Consent onAccept={() => setPhase("tasks")} />;
+  }
+
+  if (phase === "survey") {
+    return <Survey onPageComplete={handleSurveyPage} onFinish={handleSurveyFinish} />;
+  }
+
+  if (phase === "done") {
+    return <Done status={saveStatus} />;
+  }
 
   // ── Render ───────────────────────────────────────────────────────────────
 
@@ -367,6 +452,51 @@ export default function App() {
               ))}
             </div>
           </section>
+        )}
+
+        {/*
+          Task advancement. Study mode only — in demo mode there is no sequence to
+          walk through. The button is the participant's only way forward, so it is
+          always enabled: gating it on "has accepted or rejected something" would
+          make declining every suggestion an invalid answer, and declining is data.
+        */}
+        {!demoMode && taskCount > 0 && (
+          <div
+            style={{
+              marginTop: 30,
+              padding: "18px 20px",
+              background: "white",
+              border: "1px solid #e2e8f0",
+              borderRadius: 12,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ fontSize: 13, color: "#64748b" }}>
+              Situation {taskIndex + 1} of {taskCount}
+              <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 3 }}>
+                When you are done with this situation, continue.
+              </div>
+            </div>
+            <button
+              onClick={advanceTask}
+              style={{
+                background: "#2563eb",
+                color: "white",
+                border: "none",
+                borderRadius: 8,
+                padding: "11px 24px",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >
+              {isLastTask ? "Continue to the questions" : "Next situation"}
+            </button>
+          </div>
         )}
 
         {/* Footer */}

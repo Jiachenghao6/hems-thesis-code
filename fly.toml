@@ -1,0 +1,60 @@
+# Fly.io deployment for the study build.
+#
+# Why Fly: the machine can be pinned to Frankfurt, a persistent volume is included in
+# the free allowance, and a single instance can be enforced — all three matter here
+# and are awkward on the platforms that autoscale by default.
+#
+# Rename `app` before the first deploy; the name becomes part of the URL that goes
+# into the Prolific study, and it must not change once recruitment starts.
+
+app = "hems-study"
+primary_region = "fra"          # Frankfurt — the data stays inside the EU
+
+[build]
+  dockerfile = "Dockerfile"
+  # The Prolific values are build arguments because Vite inlines them into the bundle.
+  # Fill them in after creating the Prolific study, then redeploy.
+  [build.args]
+    VITE_PROLIFIC_COMPLETION_URL = ""
+    VITE_PROLIFIC_COMPLETION_CODE = ""
+
+[env]
+  DATA_DIR = "/data"
+  FRONTEND_DIST = "/app/frontend/dist"
+  PORT = "8080"
+
+# Collected data lives here. Without a volume the JSONL files sit on the machine's
+# ephemeral disk and are erased by every deploy — including the deploy you make to
+# fix a typo halfway through data collection.
+[[mounts]]
+  source = "hems_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+  # Never scale beyond one machine: the assignment ledger is a file appended to by a
+  # single process, and block randomisation counts its rows. Two machines would each
+  # keep half the picture and the groups would drift out of balance without any error.
+  min_machines_running = 1
+  auto_stop_machines = false
+  auto_start_machines = false
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 60
+
+# A study that returns 502 to a participant costs a paid submission and a data point,
+# so the health check is frequent and the grace period short.
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "10s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

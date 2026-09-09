@@ -1,6 +1,12 @@
 import type { PricePoint, RecommendResponse, ScenarioMeta, ScenarioId, Condition, SliderValues } from "./types";
 
-const BASE = "http://localhost:8000";
+/**
+ * The backend origin. Hard-coding localhost was fine while the demo only ever ran
+ * on this machine; once participants reach the study over the internet the frontend
+ * and the backend are on different hosts, so this has to be build-time configuration.
+ * Set VITE_API_BASE in the deployment environment; see `.env.example`.
+ */
+const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
 
 async function fetchJSON<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, opts);
@@ -86,6 +92,42 @@ export async function getRecommendations(
       condition,
     }),
   });
+}
+
+/**
+ * Persist one page of questionnaire answers.
+ *
+ * Unlike `logEvent`, this one throws: questionnaire responses are the study's
+ * dependent variables, and a silent failure here would produce a participant who
+ * looks complete but has no data. The caller decides what to do about it — the
+ * survey retries with the next page and again at the end, and only the very last
+ * attempt gates the completion code.
+ *
+ * Retries handle the common case (a transient network blip on a mobile connection)
+ * without bothering the participant. Three attempts with a short backoff is enough
+ * for that and short enough not to feel like a hang.
+ */
+export async function submitSurvey(payload: {
+  participant_id: string;
+  condition: Condition;
+  page: string;
+  answers: Record<string, string | number>;
+}): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await fetchJSON<{ status: string }>(`${BASE}/api/survey`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return;
+    } catch (e) {
+      lastError = e;
+      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Survey submission failed");
 }
 
 export async function logEvent(payload: {

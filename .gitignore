@@ -13,3 +13,6 @@ experiment_log*.json
 .vite/
 experiment_log*
 assignments.jsonl
+survey_responses*.jsonl
+.env.local
+.env.*.local
