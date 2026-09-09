@@ -93,6 +93,20 @@ export default function App() {
   const [taskIndex, setTaskIndex] = useState(0);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "failed">("saving");
 
+  /**
+   * Timing for the two phases that happen before any task.
+   *
+   * Every later boundary is already a timestamped row — task_complete events and
+   * one survey record per page — so durations fall out of the log without extra
+   * instrumentation. Consent and the tutorial are the exception: consent runs
+   * before a participant id exists, and nothing is written between the tutorial
+   * appearing and the first task ending, so the tutorial's reading time would be
+   * silently added to task one. Both are measured here and reported once, when the
+   * tutorial is left and there is an id to attach them to.
+   */
+  const phaseEnteredAt = useRef(performance.now());
+  const consentMs = useRef<number | null>(null);
+
   const condition: Condition = session?.condition ?? "A";
   const participantId = session?.participant_id ?? "pending";
 
@@ -294,13 +308,37 @@ export default function App() {
   // ── Phase routing ────────────────────────────────────────────────────────
 
   if (phase === "consent") {
-    return <Consent onAccept={() => setPhase("tutorial")} />;
+    return (
+      <Consent
+        onAccept={() => {
+          consentMs.current = performance.now() - phaseEnteredAt.current;
+          phaseEnteredAt.current = performance.now();
+          setPhase("tutorial");
+        }}
+      />
+    );
   }
 
   // The session is requested the moment consent is given, so the assignment
   // arrives while the tutorial is being read and task one starts without a wait.
   if (phase === "tutorial") {
-    return <Tutorial onStart={() => setPhase("tasks")} />;
+    return (
+      <Tutorial
+        onStart={() => {
+          logEvent({
+            participant_id: participantId,
+            condition,
+            event_type: "tutorial_complete",
+            extra: {
+              consent_ms: Math.round(consentMs.current ?? 0),
+              tutorial_ms: Math.round(performance.now() - phaseEnteredAt.current),
+            },
+          });
+          phaseEnteredAt.current = performance.now();
+          setPhase("tasks");
+        }}
+      />
+    );
   }
 
   if (phase === "survey") {

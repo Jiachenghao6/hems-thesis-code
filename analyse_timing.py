@@ -74,6 +74,20 @@ def phases_for(pid: str, events: list[dict], survey: list[dict]) -> dict[str, fl
     start = ts(ev[0])
     marks: list[tuple[str, datetime]] = []
 
+    # Consent and the tutorial are reported by the client rather than derived from
+    # timestamps: consent runs before a participant id exists, and without the
+    # tutorial's own duration its reading time lands inside task one.
+    pre: dict[str, float] = {}
+    tut = next((e for e in ev if e.get("event_type") == "tutorial_complete"), None)
+    if tut:
+        extra = tut.get("extra") or {}
+        if "consent_ms" in extra:
+            pre["consent"] = float(extra["consent_ms"]) / 1000
+        if "tutorial_ms" in extra:
+            pre["tutorial"] = float(extra["tutorial_ms"]) / 1000
+        # Tasks start when the tutorial is left, not when the session was created.
+        start = ts(tut)
+
     task_done = [e for e in ev if e.get("event_type") == "task_complete"]
     for i, e in enumerate(task_done, 1):
         marks.append((f"task {i}", ts(e)))
@@ -87,12 +101,14 @@ def phases_for(pid: str, events: list[dict], survey: list[dict]) -> dict[str, fl
         return None   # run never finished; timing it would understate the real length
 
     marks.sort(key=lambda m: m[1])
-    out: dict[str, float] = {}
+    out: dict[str, float] = dict(pre)          # consent / tutorial first, if reported
     prev = start
     for name, when in marks:
         out[name] = (when - prev).total_seconds()
         prev = when
-    out["TOTAL"] = (marks[-1][1] - start).total_seconds()
+    # The total is everything the participant spent, including the phases measured
+    # client-side — that is the number Prolific's estimate has to cover.
+    out["TOTAL"] = (marks[-1][1] - start).total_seconds() + sum(pre.values())
     return out
 
 
