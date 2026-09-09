@@ -48,7 +48,15 @@ app = FastAPI(
 # The previous `["*"]` was not just loose but wrong: the CORS specification forbids
 # a wildcard origin together with credentials, and browsers reject the combination,
 # so it only ever worked because nothing sent credentials yet.
-_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+# Both spellings of the loopback host: a browser treats localhost and 127.0.0.1 as
+# different origins, and whichever one is typed into the address bar is the one
+# that has to be allowed. Port 8000 is here for the case where the backend serves
+# the built frontend itself — that is same-origin and needs no CORS, but listing
+# it costs nothing and removes a confusing failure mode during local testing.
+_DEV_ORIGINS = [
+    "http://localhost:5173", "http://127.0.0.1:5173",
+    "http://localhost:8000", "http://127.0.0.1:8000",
+]
 ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get("ALLOWED_ORIGINS", ",".join(_DEV_ORIGINS)).split(",") if o.strip()
 ]

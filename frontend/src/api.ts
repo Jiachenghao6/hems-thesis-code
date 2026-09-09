@@ -1,12 +1,21 @@
 import type { PricePoint, RecommendResponse, ScenarioMeta, ScenarioId, Condition, SliderValues } from "./types";
 
 /**
- * The backend origin. Hard-coding localhost was fine while the demo only ever ran
- * on this machine; once participants reach the study over the internet the frontend
- * and the backend are on different hosts, so this has to be build-time configuration.
- * Set VITE_API_BASE in the deployment environment; see `.env.example`.
+ * Where the API lives.
+ *
+ * Only the Vite dev server needs an absolute origin: it serves the page on :5173
+ * while the backend listens on :8000, so those really are different origins. In
+ * every other case the page is served by the backend itself, and the right answer
+ * is a relative URL — the API is wherever the page came from.
+ *
+ * Naming the host explicitly was a bug waiting to happen: a build that hard-codes
+ * `http://localhost:8000` breaks the moment the page is opened as `127.0.0.1:8000`,
+ * because the browser treats those as different origins and blocks the request. The
+ * participant sees "the study could not be started" and nothing explains why.
  */
-const BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const BASE =
+  import.meta.env.VITE_API_BASE ??
+  (window.location.port === "5173" ? "http://localhost:8000" : "");
 
 async function fetchJSON<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, opts);
