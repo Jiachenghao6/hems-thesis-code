@@ -3,6 +3,26 @@
  * Single appliance recommendation with accept/reject buttons.
  * Renders either the causal explanation (Group A) or SHAP chart (Group B).
  *
+ * ── Why accept and reject look the same ───────────────────────────────────
+ *
+ * Accept used to be a filled green button and Reject a red outlined one. That is
+ * the normal way to style a primary and a secondary action, and it is wrong here
+ * for two compounding reasons: a filled control reads as the recommended action,
+ * and green/red reads as good/bad — red is what interfaces reserve for destructive
+ * operations. Acceptance rate is this study's primary dependent variable, so the
+ * interface was quietly arguing for a higher value of the thing being measured.
+ *
+ * It would not have biased the A/B comparison, since both conditions share these
+ * buttons. The danger is a ceiling effect: nudge everyone towards accepting and
+ * the between-group difference is squeezed into whatever headroom is left, which
+ * at n≈40 can cost the study the ability to detect a real effect at all.
+ *
+ * So both options are now rendered with identical weight, identical colour and
+ * identical size, differing only in their label, and the recorded decision is shown
+ * in neutral grey rather than as approval or disapproval. Accept stays on the left
+ * for every participant; a fixed order is a constant across conditions, and is
+ * reported in the study design chapter rather than counterbalanced.
+ *
  * The accept/reject decision is owned by App, not by this card. It used to be local
  * state, and because the card is keyed by appliance id — which repeats across the
  * three situations — the component was never remounted when the situation changed.
@@ -32,6 +52,23 @@ function fmtPrice(p: number): string {
   return `${p >= 0 ? "" : "−"}${Math.abs(p).toFixed(0)} €/MWh`;
 }
 
+/**
+ * One style object for both options. Defining it once is the point: two separate
+ * style blocks would be free to drift apart in a later edit, and any drift between
+ * them reintroduces exactly the bias this is here to remove.
+ */
+const choiceButton: React.CSSProperties = {
+  flex: 1,
+  padding: "9px 0",
+  borderRadius: 8,
+  background: "white",
+  color: "#334155",
+  border: "1.5px solid #cbd5e1",
+  fontWeight: 600,
+  fontSize: 14,
+  cursor: "pointer",
+};
+
 function savingsColor(eur: number): string {
   if (eur > 0.01) return "#16a34a";
   if (eur < -0.001) return "#dc2626";
@@ -48,10 +85,13 @@ export default function RecommendationCard({ rec, condition, decision, onAccept,
   return (
     <div
       style={{
-        border: `1.5px solid ${decision === "accepted" ? "#86efac" : decision === "rejected" ? "#fca5a5" : "#e2e8f0"}`,
+        // A decided card is marked as decided, not as approved or disapproved:
+        // one neutral treatment for both answers, so the four cards in a situation
+        // do not shade the ones still to be answered.
+        border: `1.5px solid ${decision ? "#94a3b8" : "#e2e8f0"}`,
         borderRadius: 12,
         padding: "16px 18px",
-        background: decision === "accepted" ? "#f0fdf4" : decision === "rejected" ? "#fff1f2" : "white",
+        background: decision ? "#f8fafc" : "white",
         transition: "border-color 0.2s, background 0.2s",
       }}
     >
@@ -70,11 +110,11 @@ export default function RecommendationCard({ rec, condition, decision, onAccept,
           <span
             style={{
               fontSize: 12, fontWeight: 600, padding: "2px 10px", borderRadius: 20,
-              background: decision === "accepted" ? "#dcfce7" : "#fee2e2",
-              color: decision === "accepted" ? "#16a34a" : "#dc2626",
+              background: "#e2e8f0",
+              color: "#475569",
             }}
           >
-            {decision === "accepted" ? "✓ Accepted" : "✗ Rejected"}
+            {decision === "accepted" ? "Accepted" : "Rejected"}
           </span>
         )}
       </div>
@@ -172,27 +212,11 @@ export default function RecommendationCard({ rec, condition, decision, onAccept,
       {/* Accept / Reject buttons */}
       {!decision && (
         <div style={{ display: "flex", gap: 10 }}>
-          <button
-            onClick={handleAccept}
-            style={{
-              flex: 1, padding: "9px 0", borderRadius: 8,
-              background: "#16a34a", color: "white",
-              border: "none", fontWeight: 600, fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
-            ✓ Accept
+          <button onClick={handleAccept} style={choiceButton}>
+            Accept
           </button>
-          <button
-            onClick={handleReject}
-            style={{
-              flex: 1, padding: "9px 0", borderRadius: 8,
-              background: "white", color: "#dc2626",
-              border: "1.5px solid #fca5a5", fontWeight: 600, fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
-            ✗ Reject
+          <button onClick={handleReject} style={choiceButton}>
+            Reject
           </button>
         </div>
       )}
