@@ -30,7 +30,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import type { Condition, ScenarioId, SliderValues, PricePoint, Recommendation, ScenarioMeta } from "./types";
 import type { SessionInfo } from "./api";
-import { createSession, getPrices, getRecommendations, getScenarios, logEvent, submitSurvey } from "./api";
+import { createSession, getPrices, getRecommendations, getScenarios, logEvent, submitSurvey, IS_PREVIEW } from "./api";
 import PriceCurve from "./components/PriceCurve";
 import TradeoffSlider from "./components/TradeoffSlider";
 import RecommendationCard from "./components/RecommendationCard";
@@ -60,6 +60,28 @@ function getProlificPid(): string {
   return q.get("PROLIFIC_PID") || q.get("prolific_pid") || "";
 }
 
+/**
+ * Preview mode: `?mode=preview&screen=<name>&condition=A|B&order=accept_first|reject_first`
+ * renders one screen of the participant flow directly, with a synthetic session and
+ * no writes (see IS_PREVIEW in api.ts). It exists to produce screenshots of the flow
+ * for the supervisor and for the thesis figures without clicking through it.
+ *
+ * screen: consent | tutorial | situation | task | survey1..survey5 | done
+ */
+const PREVIEW_SCREEN = new URLSearchParams(window.location.search).get("screen") ?? "consent";
+
+function previewPhase(): { phase: Phase; surveyPage: number } {
+  if (PREVIEW_SCREEN.startsWith("survey")) {
+    const n = Number(PREVIEW_SCREEN.slice(6)) || 1;
+    return { phase: "survey", surveyPage: Math.min(Math.max(n, 1), 5) - 1 };
+  }
+  if (PREVIEW_SCREEN === "task") return { phase: "tasks", surveyPage: 0 };
+  if (["consent", "tutorial", "situation", "done"].includes(PREVIEW_SCREEN)) {
+    return { phase: PREVIEW_SCREEN as Phase, surveyPage: 0 };
+  }
+  return { phase: "consent", surveyPage: 0 };
+}
+
 /** Demo mode only — study mode gets its condition from the server. */
 function getDemoCondition(): Condition {
   return new URLSearchParams(window.location.search).get("condition") === "B" ? "B" : "A";
@@ -84,20 +106,25 @@ export default function App() {
   // In study mode both of these arrive from /api/session; until they do, nothing
   // is rendered, so a participant can never see a condition the server did not assign.
   const [session, setSession] = useState<SessionInfo | null>(
-    demoMode
+    demoMode || IS_PREVIEW
       ? {
           participant_id: "demo",
           condition: getDemoCondition(),
-          option_order: "accept_first",
-          task_sequence: ["S3"],
+          option_order:
+            new URLSearchParams(window.location.search).get("order") === "reject_first"
+              ? "reject_first"
+              : "accept_first",
+          task_sequence: IS_PREVIEW ? ["S3", "S1", "S2"] : ["S3"],
         }
       : null
   );
   const [sessionError, setSessionError] = useState<string | null>(null);
 
-  const [phase, setPhase] = useState<Phase>(demoMode ? "tasks" : "consent");
+  const [phase, setPhase] = useState<Phase>(
+    IS_PREVIEW ? previewPhase().phase : demoMode ? "tasks" : "consent"
+  );
   const [taskIndex, setTaskIndex] = useState(0);
-  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "failed">("saving");
+  const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "failed">(IS_PREVIEW ? "saved" : "saving");
 
   /**
    * Timing for the two phases that happen before any task.
@@ -170,7 +197,7 @@ export default function App() {
   // Ask the server for a condition and the task sequence (study mode only).
   // Runs once; demo mode already has a synthetic session.
   useEffect(() => {
-    if (demoMode) return;
+    if (demoMode || IS_PREVIEW) return;
     // Not before consent: assignment writes a ledger row, which is data collection.
     if (phase === "consent") return;
     // Exactly once. `phase` has to be a dependency for the gate above to release,
@@ -393,7 +420,13 @@ export default function App() {
   }
 
   if (phase === "survey") {
-    return <Survey onPageComplete={handleSurveyPage} onFinish={handleSurveyFinish} />;
+    return (
+      <Survey
+        onPageComplete={handleSurveyPage}
+        onFinish={handleSurveyFinish}
+        initialPage={IS_PREVIEW ? previewPhase().surveyPage : 0}
+      />
+    );
   }
 
   if (phase === "done") {

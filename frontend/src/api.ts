@@ -17,6 +17,16 @@ const BASE =
   import.meta.env.VITE_API_BASE ??
   (window.location.port === "5173" ? "http://localhost:8000" : "");
 
+/**
+ * Preview mode renders any screen directly from the URL so that screenshots of the
+ * participant flow can be taken without walking through it. It must never write:
+ * a screenshot run would otherwise assign conditions, append events and fill the
+ * questionnaire file with fixture answers. The guard sits here, at the only two
+ * functions that write, rather than at every call site — a call site added later
+ * cannot forget it.
+ */
+export const IS_PREVIEW = new URLSearchParams(window.location.search).get("mode") === "preview";
+
 async function fetchJSON<T>(url: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(url, opts);
   if (!res.ok) {
@@ -130,6 +140,7 @@ export async function submitSurvey(payload: {
   /** Multi-select items store an array; the rest are scalars. */
   answers: Record<string, string | number | string[]>;
 }): Promise<void> {
+  if (IS_PREVIEW) return;
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -156,6 +167,7 @@ export async function logEvent(payload: {
   scenario?: string;
   extra?: Record<string, unknown>;
 }): Promise<void> {
+  if (IS_PREVIEW) return;
   try {
     await fetch(`${BASE}/api/log`, {
       method: "POST",

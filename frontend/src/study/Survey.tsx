@@ -44,12 +44,15 @@ const TOTAL_PAGES = 5;
 export default function Survey({
   onPageComplete,
   onFinish,
+  initialPage = 0,
 }: {
   /** Called when a page is left. Persisting is fire-and-forget by design. */
   onPageComplete: (page: string, answers: SurveyAnswers) => void;
   onFinish: (all: SurveyAnswers) => void;
+  /** Preview only: open directly on a later page for screenshots. */
+  initialPage?: number;
 }) {
-  const [page, setPage] = useState(0);
+  const [page, setPage] = useState(initialPage);
   const [answers, setAnswers] = useState<SurveyAnswers>({});
   const [showMissing, setShowMissing] = useState(false);
 
