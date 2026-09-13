@@ -29,6 +29,13 @@ async function fetchJSON<T>(url: string, opts?: RequestInit): Promise<T> {
 export interface SessionInfo {
   participant_id: string;
   condition: Condition;
+  /**
+   * Which response option is shown on the left, counterbalanced by the server and
+   * crossed with the condition. Constant for a participant across every appliance
+   * and every situation — a layout that moved between cards would pull attention
+   * to the layout instead of the content.
+   */
+  option_order: "accept_first" | "reject_first";
   task_sequence: string[];
 }
 

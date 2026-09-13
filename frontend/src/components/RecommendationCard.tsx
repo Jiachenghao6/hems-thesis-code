@@ -23,6 +23,10 @@
  * for every participant; a fixed order is a constant across conditions, and is
  * reported in the study design chapter rather than counterbalanced.
  *
+ * Which option sits on the left is decided by the server and passed in, so that
+ * the slight advantage of the leading position is spread evenly across conditions
+ * rather than always favouring the same answer.
+ *
  * The accept/reject decision is owned by App, not by this card. It used to be local
  * state, and because the card is keyed by appliance id — which repeats across the
  * three situations — the component was never remounted when the situation changed.
@@ -38,6 +42,8 @@ interface Props {
   condition: Condition;
   /** Current decision for this appliance in this situation; null until made. */
   decision: "accepted" | "rejected" | null;
+  /** Counterbalanced per participant; see the file header. */
+  optionOrder: "accept_first" | "reject_first";
   onAccept: (applianceId: string) => void;
   onReject: (applianceId: string) => void;
 }
@@ -75,7 +81,7 @@ function savingsColor(eur: number): string {
   return "#64748b";
 }
 
-export default function RecommendationCard({ rec, condition, decision, onAccept, onReject }: Props) {
+export default function RecommendationCard({ rec, condition, decision, optionOrder, onAccept, onReject }: Props) {
   const isShifted = rec.recommended_start !== rec.default_start;
   const savings = rec.savings_eur;
 
@@ -212,12 +218,20 @@ export default function RecommendationCard({ rec, condition, decision, onAccept,
       {/* Accept / Reject buttons */}
       {!decision && (
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={handleAccept} style={choiceButton}>
-            Accept
-          </button>
-          <button onClick={handleReject} style={choiceButton}>
-            Reject
-          </button>
+          {(optionOrder === "reject_first"
+            ? [
+                { label: "Reject", onClick: handleReject },
+                { label: "Accept", onClick: handleAccept },
+              ]
+            : [
+                { label: "Accept", onClick: handleAccept },
+                { label: "Reject", onClick: handleReject },
+              ]
+          ).map((opt) => (
+            <button key={opt.label} onClick={opt.onClick} style={choiceButton}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       )}
     </div>

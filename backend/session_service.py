@@ -25,8 +25,24 @@ from storage import data_file
 
 ASSIGNMENT_LOG = data_file("assignments.jsonl")
 
-BLOCK_SIZE = 4          # 每 4 人一个区组：2A + 2B
 CONDITIONS = ("A", "B")
+
+# 响应选项的左右顺序，与条件正交做平衡。
+#
+# 为什么要平衡：Accept 固定在左侧会带来轻微的首位优势，而接受率是本研究的
+# 头号因变量。固定顺序本身**不会**混淆组间比较——它对两组是相同的常数，只
+# 影响绝对水平。平衡化买到的不是"能检验位置效应"（每格 10 人，检验没有功效，
+# 报无显著差异反而是弱证据），而是让位置效应被打散而非系统性累积，且答辩时
+# "顺序做了平衡"是一句到此为止的答案。
+#
+# 同一被试内**始终一致**：三个情境、四个电器都用同一个顺序。每张卡都变会
+# 让界面像在乱跳，并把被试的注意力从内容引到布局上。
+OPTION_ORDERS = ("accept_first", "reject_first")
+
+# 四个格子各一个，因此区组仍是 4：A/左、A/右、B/左、B/右。
+# n=40 → 10 个区组 → 恰好 20A/20B，且每个条件内部 10 左 10 右。
+CELLS = tuple((c, o) for c in CONDITIONS for o in OPTION_ORDERS)
+BLOCK_SIZE = len(CELLS)
 
 # 固定任务序列 —— 两个条件完全一致。
 #
@@ -86,19 +102,43 @@ def _read_counts() -> dict[str, int]:
     return counts
 
 
-def _next_condition(counts: dict[str, int]) -> str:
-    """
-    区组随机化：在当前区组内，从尚未配满的条件中随机取一个。
-    区组填满后自动进入下一区组。
-    """
-    total = sum(counts.values())
-    filled_blocks, pos_in_block = divmod(total, BLOCK_SIZE)
-    per_condition_per_block = BLOCK_SIZE // len(CONDITIONS)
-    quota = filled_blocks * per_condition_per_block + per_condition_per_block
+def _read_cell_counts() -> dict[tuple[str, str], int]:
+    """按 (条件, 选项顺序) 统计台账。
 
-    available = [c for c in CONDITIONS if counts[c] < quota]
+    2026-09-12 之前的记录没有 option_order 字段；它们按当时的实现一律是
+    Accept 在左，因此补成 accept_first 而不是丢弃——丢弃会让区组配额从
+    错误的基数重新开始。
+    """
+    counts: dict[tuple[str, str], int] = {c: 0 for c in CELLS}
+    if not ASSIGNMENT_LOG.exists():
+        return counts
+    with ASSIGNMENT_LOG.open(encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            cell = (rec.get("condition"), rec.get("option_order", "accept_first"))
+            if cell in counts:
+                counts[cell] += 1
+    return counts
+
+
+def _next_cell(cell_counts: dict[tuple[str, str], int]) -> tuple[str, str]:
+    """
+    区组随机化：在当前区组内，从尚未配满的格子中随机取一个。
+    一个格子＝(条件, 选项顺序)，区组填满后自动进入下一区组。
+    """
+    total = sum(cell_counts.values())
+    filled_blocks = total // BLOCK_SIZE
+    quota = filled_blocks + 1              # 每个格子在每个区组里各占一个名额
+
+    available = [c for c in CELLS if cell_counts.get(c, 0) < quota]
     if not available:                      # 理论上不该发生；退化为纯随机而不是静默出错
-        available = list(CONDITIONS)
+        available = list(CELLS)
     return random.choice(available)
 
 
@@ -124,7 +164,7 @@ def _find_existing(prolific_pid: str) -> dict | None:
 
 def assign_session(prolific_pid: str | None = None) -> dict:
     """
-    分配一个被试会话。返回 participant_id / condition / task_sequence。
+    分配一个被试会话。返回 participant_id / condition / option_order / task_sequence。
 
     **幂等**：同一个 Prolific ID 再次请求时返回原来的分配，不新分。原因有二——
     一是被试刷新页面就会换组，这会把人暴露在两个条件下并直接毁掉他的数据；
@@ -142,19 +182,22 @@ def assign_session(prolific_pid: str | None = None) -> dict:
                 return {
                     "participant_id": existing["participant_id"],
                     "condition": existing["condition"],
+                    # 老记录没有这个字段，按当时的实现补 accept_first。
+                    "option_order": existing.get("option_order", "accept_first"),
                     "task_sequence": list(TASK_SEQUENCE),
                 }
 
-        counts = _read_counts()
-        condition = _next_condition(counts)
+        cell_counts = _read_cell_counts()
+        condition, option_order = _next_cell(cell_counts)
         participant_id = "p_" + secrets.token_hex(6)
 
         record = {
             "participant_id": participant_id,
             "condition": condition,
+            "option_order": option_order,
             "prolific_pid": prolific_pid or "",
             "assigned_at": datetime.now(timezone.utc).isoformat(),
-            "seq": sum(counts.values()) + 1,
+            "seq": sum(cell_counts.values()) + 1,
         }
         _ensure_trailing_newline()
         with ASSIGNMENT_LOG.open("a", encoding="utf-8") as fh:
@@ -164,6 +207,7 @@ def assign_session(prolific_pid: str | None = None) -> dict:
     return {
         "participant_id": participant_id,
         "condition": condition,
+        "option_order": option_order,
         "task_sequence": list(TASK_SEQUENCE),
     }
 
@@ -171,4 +215,10 @@ def assign_session(prolific_pid: str | None = None) -> dict:
 def assignment_summary() -> dict:
     """给研究者看的分组进度，不暴露给被试。"""
     counts = _read_counts()
-    return {"counts": counts, "total": sum(counts.values()), "block_size": BLOCK_SIZE}
+    cells = _read_cell_counts()
+    return {
+        "counts": counts,
+        "cells": {f"{c}/{o}": n for (c, o), n in sorted(cells.items())},
+        "total": sum(counts.values()),
+        "block_size": BLOCK_SIZE,
+    }

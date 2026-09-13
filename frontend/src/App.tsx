@@ -85,7 +85,12 @@ export default function App() {
   // is rendered, so a participant can never see a condition the server did not assign.
   const [session, setSession] = useState<SessionInfo | null>(
     demoMode
-      ? { participant_id: "demo", condition: getDemoCondition(), task_sequence: ["S3"] }
+      ? {
+          participant_id: "demo",
+          condition: getDemoCondition(),
+          option_order: "accept_first",
+          task_sequence: ["S3"],
+        }
       : null
   );
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -554,6 +559,7 @@ export default function App() {
                   rec={rec}
                   condition={condition}
                   decision={decisions[rec.appliance_id] ?? null}
+                  optionOrder={session.option_order}
                   onAccept={handleAccept}
                   onReject={handleReject}
                 />
