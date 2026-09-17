@@ -39,7 +39,7 @@ export default function Consent({ onAccept }: { onAccept: () => void }) {
           <p style={item}>
             <strong>What you will do.</strong> You will set your priorities, look at the suggestions the system
             makes, and decide whether to accept them. Afterwards you will answer a short questionnaire. The
-            whole study takes about 20 minutes.
+            whole study takes about 15 minutes.
           </p>
           <p style={item}>
             <strong>What is recorded.</strong> Your Prolific ID, the settings you choose, the suggestions you
