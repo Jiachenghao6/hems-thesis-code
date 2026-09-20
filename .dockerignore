@@ -1,0 +1,33 @@
+# Keep the build context small and clean.
+#
+# Without this the whole of frontend/node_modules (130 MB+) is sent to the daemon,
+# which is slow and outright fails: some packages ship symlinks that the tar writer
+# rejects with "archive/tar: unknown file mode". Dependencies are installed inside
+# the image by `npm ci`, so the local copy is never needed.
+
+node_modules/
+**/node_modules/
+frontend/dist/
+**/__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Participant data never belongs in an image layer — it lives on the mounted volume.
+*.jsonl
+backups/
+pilot-runs/
+
+.git/
+.gitignore
+*.log
+.env
+.env.*
+!.env.example
+
+# Local tooling and notes that the runtime does not need.
+.claude/
+*.md
+start-pilot.ps1
+analyse_timing.py
+backup_study_data.py

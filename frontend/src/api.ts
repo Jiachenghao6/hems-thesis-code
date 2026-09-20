@@ -92,6 +92,27 @@ export async function createSession(prolificPid: string): Promise<SessionInfo> {
   return sessionInFlight;
 }
 
+export interface StudyConfig {
+  prolific_completion_url: string;
+  prolific_completion_code: string;
+}
+
+/**
+ * Deployment settings fetched at run time. Falls back to the build-time variables
+ * so local development and the preview screenshots keep working with no server
+ * configuration at all.
+ */
+export async function getStudyConfig(): Promise<StudyConfig> {
+  try {
+    return await fetchJSON<StudyConfig>(`${BASE}/api/config`);
+  } catch {
+    return {
+      prolific_completion_url: import.meta.env.VITE_PROLIFIC_COMPLETION_URL ?? "",
+      prolific_completion_code: import.meta.env.VITE_PROLIFIC_COMPLETION_CODE ?? "",
+    };
+  }
+}
+
 export async function getPrices(scenario: ScenarioId): Promise<PricePoint[]> {
   const data = await fetchJSON<{ prices: PricePoint[] }>(`${BASE}/api/prices/${scenario}`);
   return data.prices;

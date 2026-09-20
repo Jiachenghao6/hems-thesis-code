@@ -16,32 +16,42 @@
  * without a way to complete the submission manually.
  */
 import { useEffect, useState } from "react";
+import { getStudyConfig } from "../api";
 import { cardStyle, pageStyle } from "./ui";
-
-/**
- * Both come from the Prolific study page and are injected at build time.
- * See `.env.example`. Leaving them unset is fine in development — the screen
- * then simply omits the redirect.
- */
-const COMPLETION_URL = import.meta.env.VITE_PROLIFIC_COMPLETION_URL ?? "";
-const COMPLETION_CODE = import.meta.env.VITE_PROLIFIC_COMPLETION_CODE ?? "";
 
 const REDIRECT_DELAY_MS = 6000;
 
 export default function Done({ status }: { status: "saving" | "saved" | "failed" }) {
   const [seconds, setSeconds] = useState(Math.round(REDIRECT_DELAY_MS / 1000));
 
+  // Asked for at run time rather than compiled in: the completion code only exists
+  // once the Prolific study has been created, which in turn needs the deployed URL.
+  const [completionUrl, setCompletionUrl] = useState("");
+  const [completionCode, setCompletionCode] = useState("");
+
   useEffect(() => {
-    if (status !== "saved" || !COMPLETION_URL) return;
+    let cancelled = false;
+    getStudyConfig().then((c) => {
+      if (cancelled) return;
+      setCompletionUrl(c.prolific_completion_url);
+      setCompletionCode(c.prolific_completion_code);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (status !== "saved" || !completionUrl) return;
     const tick = setInterval(() => setSeconds((s) => Math.max(0, s - 1)), 1000);
     const jump = setTimeout(() => {
-      window.location.href = COMPLETION_URL;
+      window.location.href = completionUrl;
     }, REDIRECT_DELAY_MS);
     return () => {
       clearInterval(tick);
       clearTimeout(jump);
     };
-  }, [status]);
+  }, [status, completionUrl]);
 
   return (
     <div style={{ ...pageStyle, padding: "72px 16px" }}>
@@ -64,7 +74,7 @@ export default function Done({ status }: { status: "saving" | "saved" | "failed"
               bachelor's thesis at the Technical University of Munich.
             </p>
 
-            {COMPLETION_CODE && (
+            {completionCode && (
               <div
                 style={{
                   border: "1px solid #e2e8f0",
@@ -76,18 +86,18 @@ export default function Done({ status }: { status: "saving" | "saved" | "failed"
               >
                 <div style={{ fontSize: 12, color: "#64748b", marginBottom: 7 }}>Your completion code</div>
                 <div style={{ fontSize: 21, fontWeight: 700, letterSpacing: 1.5, fontFamily: "monospace" }}>
-                  {COMPLETION_CODE}
+                  {completionCode}
                 </div>
               </div>
             )}
 
-            {COMPLETION_URL ? (
+            {completionUrl ? (
               <>
                 <p style={{ fontSize: 13, color: "#64748b", margin: "0 0 14px" }}>
                   Returning you to Prolific in {seconds}s…
                 </p>
                 <a
-                  href={COMPLETION_URL}
+                  href={completionUrl}
                   style={{
                     display: "inline-block",
                     background: "#2563eb",

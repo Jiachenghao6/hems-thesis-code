@@ -6,6 +6,7 @@ FastAPI backend serving:
   POST /api/log                 — write experiment event to JSONL file
   POST /api/session             — assign condition + task sequence (block randomised)
   GET  /api/session/summary     — researcher-only assignment progress
+  GET  /api/config              — participant-visible deployment settings
   POST /api/survey              — store one page of questionnaire answers
   GET  /api/survey/summary      — researcher-only questionnaire progress
   GET  /health                  — uptime check
@@ -155,6 +156,26 @@ async def session_summary(token: str | None = None):
     """Recruitment progress. Researcher-only — see _require_researcher."""
     _require_researcher(token)
     return {**assignment_summary(), "task_sequence": list(TASK_SEQUENCE)}
+
+
+@app.get("/api/config")
+async def get_config():
+    """Deployment settings the participant-facing page needs at run time.
+
+    The Prolific completion code and return URL used to be compiled into the
+    frontend bundle. That created a loop: the study URL is needed to create the
+    Prolific study, the study has to exist before it issues a completion code, and
+    the code had to be present before the bundle could be built. Reading them here
+    breaks it — the app is deployed once, and the codes are set afterwards with
+    `fly secrets set`, with no rebuild and no change to the URL already handed to
+    participants.
+
+    Everything returned here is shown to participants anyway; never add a secret.
+    """
+    return {
+        "prolific_completion_url": os.environ.get("PROLIFIC_COMPLETION_URL", ""),
+        "prolific_completion_code": os.environ.get("PROLIFIC_COMPLETION_CODE", ""),
+    }
 
 
 @app.get("/api/scenarios")
