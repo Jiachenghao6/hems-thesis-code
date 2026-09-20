@@ -175,6 +175,15 @@ async def get_config():
     return {
         "prolific_completion_url": os.environ.get("PROLIFIC_COMPLETION_URL", ""),
         "prolific_completion_code": os.environ.get("PROLIFIC_COMPLETION_CODE", ""),
+        # A second, separate completion path for participants on a screen too narrow
+        # to show the explanations fairly. Prolific's device checkboxes are, in their
+        # own words, "merely used as an indicator for participants and ... do not
+        # screen out participants", so the study itself has to do the checking and
+        # send those participants down a "Request a return" path. Separate from the
+        # normal completion URL on purpose: the two mean opposite things to Prolific,
+        # one approves a submission and the other asks for it back.
+        "prolific_incompatible_url": os.environ.get("PROLIFIC_INCOMPATIBLE_URL", ""),
+        "prolific_incompatible_code": os.environ.get("PROLIFIC_INCOMPATIBLE_CODE", ""),
     }
 
 

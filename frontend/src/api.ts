@@ -95,6 +95,9 @@ export async function createSession(prolificPid: string): Promise<SessionInfo> {
 export interface StudyConfig {
   prolific_completion_url: string;
   prolific_completion_code: string;
+  /** Where a participant on too small a screen is sent; a "Request a return" path. */
+  prolific_incompatible_url: string;
+  prolific_incompatible_code: string;
 }
 
 /**
@@ -109,6 +112,8 @@ export async function getStudyConfig(): Promise<StudyConfig> {
     return {
       prolific_completion_url: import.meta.env.VITE_PROLIFIC_COMPLETION_URL ?? "",
       prolific_completion_code: import.meta.env.VITE_PROLIFIC_COMPLETION_CODE ?? "",
+      prolific_incompatible_url: "",
+      prolific_incompatible_code: "",
     };
   }
 }

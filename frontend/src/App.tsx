@@ -30,11 +30,13 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import type { Condition, ScenarioId, SliderValues, PricePoint, Recommendation, ScenarioMeta } from "./types";
 import type { SessionInfo } from "./api";
-import { createSession, getPrices, getRecommendations, getScenarios, logEvent, submitSurvey, IS_PREVIEW } from "./api";
+import { createSession, getPrices, getRecommendations, getScenarios, getStudyConfig, logEvent, submitSurvey, IS_PREVIEW } from "./api";
+import type { StudyConfig } from "./api";
 import PriceCurve from "./components/PriceCurve";
 import TradeoffSlider from "./components/TradeoffSlider";
 import RecommendationCard from "./components/RecommendationCard";
 import Consent from "./study/Consent";
+import DeviceCheck, { MIN_VIEWPORT_WIDTH } from "./study/DeviceCheck";
 import Tutorial from "./study/Tutorial";
 import Situation, { FRAMINGS } from "./study/Situation";
 import Survey from "./study/Survey";
@@ -142,6 +144,67 @@ export default function App() {
 
   /** Guards the session request against re-running on every phase change. */
   const sessionRequested = useRef(false);
+
+  /**
+   * Is the window wide enough to run the study, and how wide is it.
+   *
+   * The decision comes from a media query rather than from comparing `innerWidth`
+   * against the threshold on every `resize`. Crossing the threshold is exactly what
+   * a media query is for, and it fires where a `resize` listener does not: caught in
+   * testing, where the viewport changed to 768px, `window.innerWidth` read 768, and
+   * the gate stayed up because no resize event had arrived to update the state. A
+   * participant who widened their window and saw nothing happen would reasonably
+   * conclude the study was broken. `resize` is kept as well, but only to refresh the
+   * number shown on screen.
+   */
+  const WIDE_ENOUGH = `(min-width: ${MIN_VIEWPORT_WIDTH}px)`;
+  const [wideEnough, setWideEnough] = useState(() => window.matchMedia(WIDE_ENOUGH).matches);
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE_ENOUGH);
+    const sync = () => {
+      setWideEnough(mq.matches);
+      setViewportWidth(window.innerWidth);
+    };
+    sync();
+    mq.addEventListener("change", sync);
+    window.addEventListener("resize", sync);
+    return () => {
+      mq.removeEventListener("change", sync);
+      window.removeEventListener("resize", sync);
+    };
+  }, [WIDE_ENOUGH]);
+
+  /**
+   * Belt and braces for the gate: while it is up, re-check twice a second.
+   *
+   * Both listeners above failed to fire under viewport emulation — `matchMedia`
+   * returned true at the threshold while React never re-rendered, so the gate stayed
+   * up on a window that was wide enough. That may well be an artefact of the test
+   * harness rather than of real browsers, but it is not a thing to find out from
+   * participant complaints: someone who widens their window, sees nothing happen and
+   * concludes the study is broken is a lost participant who cannot be recovered.
+   *
+   * The cost is bounded to the one screen nobody should be looking at for long: the
+   * interval only exists while `wideEnough` is false and is cleared the moment it
+   * flips.
+   */
+  useEffect(() => {
+    if (wideEnough) return;
+    const id = window.setInterval(() => {
+      setWideEnough(window.matchMedia(WIDE_ENOUGH).matches);
+      setViewportWidth(window.innerWidth);
+    }, 500);
+    return () => window.clearInterval(id);
+  }, [wideEnough, WIDE_ENOUGH]);
+
+  /** Deployment settings; only the Prolific URLs, and only needed at the two ends. */
+  const [config, setConfig] = useState<StudyConfig | null>(null);
+  useEffect(() => {
+    getStudyConfig()
+      .then(setConfig)
+      .catch(() => setConfig(null));   // the gate then shows instructions without a button
+  }, []);
 
   /**
    * Every screen starts at the top.
@@ -409,6 +472,22 @@ export default function App() {
   const currentMeta = scenarioMeta.find((m) => m.id === scenario);
 
   // ── Phase routing ────────────────────────────────────────────────────────
+
+  /**
+   * Too narrow a window, and only while nothing has happened yet.
+   *
+   * Scoped to the consent phase deliberately. Prolific's guidance is to check the
+   * device "at the very start of your study, before participants invest significant
+   * time", and that is the whole of the intent: someone who has already worked
+   * through two situations and then rotates their tablet must not be thrown out and
+   * lose their progress. Before consent there is nothing to lose — no row in the
+   * ledger, no condition assigned, no cell spent.
+   *
+   * Demo and preview builds skip it so screenshots and local work are unaffected.
+   */
+  if (phase === "consent" && !demoMode && !IS_PREVIEW && !wideEnough) {
+    return <DeviceCheck width={viewportWidth} returnUrl={config?.prolific_incompatible_url ?? ""} />;
+  }
 
   if (phase === "consent") {
     return (
