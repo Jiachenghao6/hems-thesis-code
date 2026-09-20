@@ -123,7 +123,16 @@ class LogEvent(BaseModel):
     event_type: str = Field(..., description="accept | reject | slider_move | scenario_change | page_load")
     appliance_id: str = Field(default="", description="Appliance affected (for accept/reject)")
     slider_values: dict = Field(default_factory=dict, description="Current slider state at event time")
-    scenario: str = Field(default="live")
+    # Empty, not "live". Some events genuinely have no scenario — `tutorial_complete`
+    # fires before any task screen exists — and the old default stamped those rows with
+    # `live`, the one scenario the study deliberately excludes because it pulls a
+    # different price curve on every day of data collection. The rows were therefore
+    # asserting that the excluded scenario had been shown, which is both false and
+    # exactly the kind of thing that looks like a leak when the log is read months later
+    # or attached as an appendix. A blank says "not applicable" and cannot be mistaken
+    # for a real one. `RecommendRequest` keeps its "live" default: there the value picks
+    # a price source and a real answer is required.
+    scenario: str = Field(default="", description="S1–S5, or empty when the event has no scenario")
     timestamp: str = Field(default="", description="ISO-8601; auto-filled if empty")
     extra: dict = Field(default_factory=dict, description="Any additional metadata")
 
