@@ -43,8 +43,8 @@ export default function Consent({ onAccept }: { onAccept: () => void }) {
           </p>
           <p style={item}>
             <strong>What is recorded.</strong> Your Prolific ID, the settings you choose, which suggestions you
-            accept or reject, and your answers to the questions. Nothing is recorded by camera or microphone,
-            and we never ask for your name or contact details.
+            accept or reject, your answers to the questions, and the size of the screen you are using. Nothing
+            is recorded by camera or microphone, and we never ask for your name or contact details.
           </p>
           <p style={item}>
             <strong>How your data is handled.</strong> Your answers are stored under a random code, not under

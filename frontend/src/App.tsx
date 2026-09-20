@@ -262,7 +262,27 @@ export default function App() {
   useEffect(() => {
     if (!session) return;
     fetchRecommendations(sliders, scenario);
-    logEvent({ participant_id: participantId, condition, event_type: "page_load", scenario });
+    // What kind of screen this was answered on. Recruiting on Prolific without
+    // restricting the device means some participants work on a phone and some on a
+    // desktop, and the two see genuinely different layouts — the price curve in
+    // particular. Random assignment keeps device from confounding the comparison, but
+    // "how many were on a phone, and did they differ" is the first thing anyone will
+    // ask about the results, and it cannot be recovered after the fact.
+    //
+    // Deliberately not the user-agent string: it is quasi-identifying, adds
+    // fingerprinting surface, and answers nothing that these two fields do not. The
+    // consent page lists this among what is recorded.
+    logEvent({
+      participant_id: participantId,
+      condition,
+      event_type: "page_load",
+      scenario,
+      extra: {
+        viewport_width: window.innerWidth,
+        viewport_height: window.innerHeight,
+        touch: window.matchMedia("(pointer: coarse)").matches,
+      },
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
