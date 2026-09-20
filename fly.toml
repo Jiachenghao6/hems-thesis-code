@@ -41,10 +41,16 @@ primary_region = "fra"          # Frankfurt — the data stays inside the EU
   auto_stop_machines = false
   auto_start_machines = false
 
+  # These limits exist to tell Fly when to spread load across machines — and this app
+  # deliberately runs on exactly one. Leaving them at 40/60 would mean the proxy starts
+  # shedding requests during a burst it could easily serve: a load test against the
+  # deployed machine handled 50 simultaneous /api/recommend calls with a 157 ms p95.
+  # Raised well above anything 40 participants can produce, since a refused request
+  # during the study costs a paid submission.
   [http_service.concurrency]
     type = "requests"
-    soft_limit = 40
-    hard_limit = 60
+    soft_limit = 200
+    hard_limit = 250
 
 # A study that returns 502 to a participant costs a paid submission and a data point,
 # so the health check is frequent and the grace period short.
