@@ -27,7 +27,7 @@
  * and that is already data collection. So `createSession` is not called until
  * consent has been given. Demo mode skips straight to the tasks.
  */
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
 import type { Condition, ScenarioId, SliderValues, PricePoint, Recommendation, ScenarioMeta } from "./types";
 import type { SessionInfo } from "./api";
 import { createSession, getPrices, getRecommendations, getScenarios, logEvent, submitSurvey, IS_PREVIEW } from "./api";
@@ -142,6 +142,27 @@ export default function App() {
 
   /** Guards the session request against re-running on every phase change. */
   const sessionRequested = useRef(false);
+
+  /**
+   * Every screen starts at the top.
+   *
+   * Three of the six transitions had no scroll reset at all, and the other three
+   * scrolled before the state update, i.e. against the screen being left. Both
+   * show up the same way on a phone, which was how this was found: the tutorial
+   * is long, so leaving it from the Continue button at the bottom opened the next
+   * screen already scrolled halfway down. Doing it in a layout effect keyed on the
+   * screen identity covers every transition, including ones added later, and runs
+   * after React has laid the new screen out but before the browser paints it.
+   */
+  const scrollAnchor = `${phase}:${taskIndex}`;
+  const firstPaint = useRef(true);
+  useLayoutEffect(() => {
+    if (firstPaint.current) {
+      firstPaint.current = false;
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [scrollAnchor]);
 
   /**
    * Accept/reject per appliance, for the CURRENT situation only, cleared when the
@@ -335,7 +356,6 @@ export default function App() {
     });
     if (isLastTask) {
       setPhase("survey");
-      window.scrollTo({ top: 0 });
       return;
     }
     const next = taskIndex + 1;
@@ -344,7 +364,6 @@ export default function App() {
     setDecisions({});
     setScenario((session?.task_sequence[next] as ScenarioId) ?? scenario);
     setPhase("situation");
-    window.scrollTo({ top: 0 });
   };
 
   // ── Questionnaire ────────────────────────────────────────────────────────
@@ -360,7 +379,6 @@ export default function App() {
   const handleSurveyFinish = (all: SurveyAnswers) => {
     setPhase("done");
     setSaveStatus("saving");
-    window.scrollTo({ top: 0 });
     // One final write of everything. This is the attempt that gates the completion
     // code, so its outcome is shown to the participant rather than swallowed.
     submitSurvey({ participant_id: participantId, condition, page: "checks", answers: all })

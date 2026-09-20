@@ -21,7 +21,7 @@
  *    Performance) are recoded in analysis, never here — storing recoded values
  *    makes the raw responses unrecoverable if the scoring is ever revised.
  */
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import {
   CHECK_ITEMS,
   CLOSING_ITEMS,
@@ -39,6 +39,19 @@ import { ChoiceQuestion, LikertRow, OpenQuestion, RadioQuestion, SurveyPage, Tlx
 /** Multi-select answers are stored as arrays; everything else stays scalar. */
 export type SurveyAnswers = Record<string, string | number | string[]>;
 
+/**
+ * Scroll to a question by id, whatever widget it happens to be built from: a
+ * radio or checkbox group carries the id as `name`, the TLX scales and the free
+ * text carry it as `data-q`.
+ */
+function scrollToQuestion(id: string) {
+  const el =
+    document.querySelector(`[name="${id}"]`) ??
+    document.querySelector(`[data-q="${id}"]`) ??
+    document.getElementById(id);
+  el?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
 const TOTAL_PAGES = 5;
 
 export default function Survey({
@@ -55,6 +68,35 @@ export default function Survey({
   const [page, setPage] = useState(initialPage);
   const [answers, setAnswers] = useState<SurveyAnswers>({});
   const [showMissing, setShowMissing] = useState(false);
+
+  /**
+   * Start every page at the top.
+   *
+   * This used to be a `window.scrollTo` inside the Continue handler, which ran
+   * against the page being left, before React had swapped in the next one. On a
+   * phone that left participants partway down the new page: reported from a real
+   * Android session where page 2 opened with its heading already scrolled past.
+   * Two things went wrong and both are fixed here.
+   *
+   *  1. Scroll after the new page has been laid out, not before. A layout effect
+   *     keyed on `page` runs between React's commit and the browser's paint, so
+   *     the position is never visibly wrong.
+   *
+   *  2. Cancel any smooth scroll still in flight. Pressing Continue with something
+   *     unanswered starts an animated scroll to the missing question; answering it
+   *     and pressing Continue again within that half second used to let the old
+   *     animation finish *after* the jump to the top, landing mid-page. An instant
+   *     scroll to the current position stops the animation before we move.
+   */
+  const firstRender = useRef(true);
+  useLayoutEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    window.scrollTo({ top: window.scrollY, behavior: "instant" as ScrollBehavior });
+    window.scrollTo({ top: 0, behavior: "instant" as ScrollBehavior });
+  }, [page]);
 
   const set = (id: string, v: string | number | string[]) => setAnswers((a) => ({ ...a, [id]: v }));
   const num = (id: string) => answers[id] as number | undefined;
@@ -89,16 +131,16 @@ export default function Survey({
     if (missing.length > 0) {
       setShowMissing(true);
       // Bring the first unanswered question into view rather than leaving the
-      // participant to hunt for the red marker on a long page.
-      document.querySelector(`[name="${missing[0]}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+      // participant to hunt for the red marker on a long page. The TLX scales are
+      // not radio groups, so `[name=...]` alone would silently find nothing there.
+      scrollToQuestion(missing[0]);
       return;
     }
     const pageAnswers: SurveyAnswers = {};
     for (const id of requiredIds) pageAnswers[id] = answers[id];
     onPageComplete(pageName, pageAnswers);
     setShowMissing(false);
-    window.scrollTo({ top: 0 });
-    setPage((p) => p + 1);
+    setPage((p) => p + 1);   // the layout effect above puts the new page at the top
   };
 
   const countMissing = (ids: string[]) => (showMissing ? ids.filter((id) => answers[id] === undefined).length : 0);
@@ -214,12 +256,7 @@ export default function Survey({
       onNext={() => {
         if (missingHere.length > 0) {
           setShowMissing(true);
-          const first = missingHere[0];
-          const el =
-            document.querySelector(`[name="${first}"]`) ??
-            document.querySelector(`[data-q="${first}"]`) ??
-            document.getElementById(first);
-          el?.scrollIntoView({ block: "center", behavior: "smooth" });
+          scrollToQuestion(missingHere[0]);
           return;
         }
         onPageComplete("checks", answers);
