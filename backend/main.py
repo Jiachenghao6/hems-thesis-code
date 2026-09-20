@@ -403,7 +403,16 @@ if _DIST.is_dir():
     from fastapi.responses import FileResponse
     from fastapi.staticfiles import StaticFiles
 
-    app.mount("/assets", StaticFiles(directory=_DIST / "assets"), name="assets")
+    # Vite fingerprints every bundle, so a given /assets/index-<hash>.js is immutable:
+    # its contents can never change, only its name. A year of caching is therefore safe
+    # and saves the participant re-downloading 240 kB on every page they open.
+    class _ImmutableAssets(StaticFiles):
+        def file_response(self, *args, **kwargs):          # type: ignore[override]
+            response = super().file_response(*args, **kwargs)
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return response
+
+    app.mount("/assets", _ImmutableAssets(directory=_DIST / "assets"), name="assets")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(full_path: str):
@@ -412,8 +421,24 @@ if _DIST.is_dir():
         Registered last so it cannot shadow the /api and /health routes above.
         A real file is served if it exists (favicon and friends); anything else gets
         index.html, which is what a refresh on a deep link needs.
+
+        index.html must never be cached without revalidating. It was going out with a
+        Last-Modified and an ETag but no Cache-Control at all, which leaves browsers to
+        guess: the usual heuristic is a tenth of the document's age, so a deployment
+        that has been up a week is treated as fresh for most of a day. That is a real
+        hazard here rather than a theoretical one, because a redeploy renames the bundle
+        and the old name starts returning 404 — verified, not assumed. A participant
+        holding a cached index.html would then reload into a blank page, mid-study, and
+        nothing in the data would say why.
+
+        `no-cache` does not mean "do not store": the browser keeps the file and asks
+        whether it changed before using it. Starlette's FileResponse does not answer
+        those conditional requests — an `If-None-Match` carrying the current ETag still
+        comes back 200 with the body, checked rather than assumed — so every navigation
+        re-fetches index.html in full. That is fine at roughly half a kilobyte, and the
+        bundles it points at are the large files, which are cached for a year above.
         """
         candidate = _DIST / full_path
         if full_path and candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(_DIST / "index.html")
+        return FileResponse(_DIST / "index.html", headers={"Cache-Control": "no-cache"})

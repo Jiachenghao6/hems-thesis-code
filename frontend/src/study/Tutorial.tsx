@@ -55,28 +55,36 @@ export default function Tutorial({ onStart }: { onStart: () => void }) {
     <div style={{ ...pageStyle, padding: "32px 16px 64px" }}>
       <div style={cardStyle}>
         <h1 style={{ fontSize: 20, margin: "0 0 8px", fontWeight: 600 }}>Before you start</h1>
+        {/*
+          Kept short on purpose. The three tasks themselves take around two and a half
+          minutes, so a tutorial that takes two minutes to read is a third of the study,
+          and a paid participant skims it — which shows up in the data as somebody who
+          never touched the priority control.
+
+          What was cut was whatever the screen already says: the three priorities are
+          named in the legend a few centimetres below, and the four appliances appear by
+          name seconds later. What was kept is the part that cannot be inferred from
+          looking (the three always total 100%) and the two sentences that protect the
+          measures — see the notes on each.
+        */}
         <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.6, margin: "0 0 26px" }}>
           Electricity costs a different amount at each hour of the day, and at some hours more of it comes from
-          wind and solar. This system uses that to suggest when to run your appliances. Here is what you will
-          do — about a minute to read.
+          wind and solar. This system uses that to suggest when to run your appliances.
         </p>
 
         <div style={step}>
           <div style={num}>1</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>You will see three days.</strong> One after another. On each day you can see how the price
-            changes hour by hour, and the system suggests a time to run four appliances: a dishwasher, a washing
-            machine, a water heater and an EV charger.
+            <strong>Three days, one after another.</strong> On each one you see how the price changes through the
+            day, and the system suggests a time for four household appliances.
           </div>
         </div>
 
         <div style={step}>
           <div style={num}>2</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>You choose what matters.</strong> Three things can make one hour better than another: it is
-            cheaper, it is greener, or it is closer to when you would normally run the appliance. You decide how
-            much weight each one gets. The three always add up to 100%, so giving more to one means giving less
-            to the others.
+            <strong>You choose what matters.</strong> The three priorities below always add up to 100%, so giving
+            more to one means giving less to the others.
           </div>
         </div>
 
@@ -131,26 +139,39 @@ export default function Tutorial({ onStart }: { onStart: () => void }) {
             telling people to watch for things updating turns the manipulation check at
             the end into a test of whether they followed an instruction.
           */}
+          {/*
+            The second sentence stays whatever else is cut. In the three pilot runs the
+            control was moved between two and four times across all three situations —
+            roughly once per situation. A participant who barely moves it sees almost the
+            same screen in either condition, and the manipulation stops being a
+            manipulation. This is the only place anything invites them to move it again.
+          */}
           <p style={{ fontSize: 13, color: "#64748b", margin: "12px 0 0", lineHeight: 1.6 }}>
-            Drag the white lines between the colours to shift the balance; the arrow keys work too. Change it as
-            often as you like — there is no correct setting.
+            Drag the white lines between the colours to change the balance — arrow keys work too. Change it as
+            often as you like; there is no correct setting.
           </p>
         </div>
 
         <div style={step}>
           <div style={num}>3</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>You accept or reject each suggestion.</strong> Next to every suggested time there is an
-            explanation of why the system chose it. Accept the times you would really use, reject the ones you
-            would not. Rejecting is just as useful to us as accepting.
+            {/*
+              "Just as useful to us as accepting" also stays. Without it the agreeable
+              answer is to accept everything, and acceptance rate is the primary
+              dependent variable — the sentence costs eight words and protects it. The
+              generic "no right or wrong answers" that used to sit in step 4 said less
+              and said it further from the decision it was about.
+            */}
+            <strong>You accept or reject each suggestion.</strong> Next to each suggested time there is an
+            explanation of why the system chose it. Reject the ones you would not actually use — that is just as
+            useful to us as accepting.
           </div>
         </div>
 
         <div style={step}>
           <div style={num}>4</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>Then some questions.</strong> About how the task felt and what you thought of the system.
-            Nothing in this study has a right or wrong answer.
+            <strong>Then some questions</strong> about the system and how the task felt.
           </div>
         </div>
 
@@ -166,8 +187,7 @@ export default function Tutorial({ onStart }: { onStart: () => void }) {
             marginTop: 4,
           }}
         >
-          Take your time — nothing here is timed. Please stay in this window until the end, so your submission is
-          recorded.
+          Nothing here is timed. Please stay in this window until the end, so your submission is recorded.
         </div>
 
         <button
