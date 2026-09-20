@@ -246,7 +246,7 @@ export default function PriceCurve({ prices, recommendations }: Props) {
             opacity={0.8}
             transform={`rotate(90, ${INNER_W + 42}, ${INNER_H / 2})`}
           >
-            Renewable
+            Wind &amp; solar
           </text>
         )}
       </g>
@@ -275,8 +275,11 @@ export default function PriceCurve({ prices, recommendations }: Props) {
           {hasRenewable && (
             <g transform={`translate(${recommendations.length * 155}, 0)`}>
               <line x1={0} y1={-4} x2={14} y2={-4} stroke="#16a34a" strokeWidth={1.5} strokeDasharray="4 2" />
+              {/* Plain words, matching the priority control and the explanation text.
+                  "Renewable share" is a phrase from the energy literature; the people
+                  reading this chart were recruited off Prolific. */}
               <text x={18} y={0} fontSize={9} fill="#16a34a">
-                Renewable share
+                Wind &amp; solar
               </text>
             </g>
           )}

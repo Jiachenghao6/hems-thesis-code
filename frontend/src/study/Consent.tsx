@@ -33,29 +33,30 @@ export default function Consent({ onAccept }: { onAccept: () => void }) {
         <div style={{ fontSize: 14, color: "#334155" }}>
           <p style={item}>
             <strong>What this study is about.</strong> You will use a prototype that suggests when to run
-            household appliances such as a dishwasher or a washing machine. We are interested in how people
-            work with such a system and how they judge its suggestions.
+            household appliances, such as a dishwasher or a washing machine. We want to find out how people
+            work with a system like this, and what they think of its suggestions.
           </p>
           <p style={item}>
-            <strong>What you will do.</strong> You will set your priorities, look at the suggestions the system
-            makes, and decide whether to accept them. Afterwards you will answer a short questionnaire. The
+            <strong>What you will do.</strong> You will tell the system what matters to you, look at the times
+            it suggests, and decide whether you would follow them. After that there are some questions. The
             whole study takes about 15 minutes.
           </p>
           <p style={item}>
-            <strong>What is recorded.</strong> Your Prolific ID, the settings you choose, the suggestions you
-            accept or reject, and your questionnaire answers. There is no audio or video recording, and we do
-            not ask for your name or any contact details.
+            <strong>What is recorded.</strong> Your Prolific ID, the settings you choose, which suggestions you
+            accept or reject, and your answers to the questions. Nothing is recorded by camera or microphone,
+            and we never ask for your name or contact details.
           </p>
           <p style={item}>
-            <strong>How your data is handled.</strong> Your responses are stored under a randomly generated
-            identifier. Your Prolific ID is kept separately and is used only to confirm your submission and
-            your payment; it is not stored together with your answers. The data are analysed only in
-            aggregate and are used solely for this thesis. No personal data are published.
+            <strong>How your data is handled.</strong> Your answers are stored under a random code, not under
+            your name. Your Prolific ID is kept in a separate place and is used only to confirm your submission
+            and pay you — it is never stored next to your answers. We look at everyone's answers together, never
+            at one person's on their own. The data are used only for this thesis, and nothing personal is
+            published.
           </p>
           <p style={item}>
-            <strong>Voluntary participation.</strong> Participation is voluntary. You may stop at any point by
-            closing the window. If you stop, please return the submission on Prolific so that you are not
-            penalised. Data from unfinished sessions are not analysed.
+            <strong>Taking part is voluntary.</strong> You can stop at any point by closing the window. If you
+            do stop, please return the submission on Prolific so that it does not count against you. Data from
+            unfinished sessions are not used.
           </p>
           <p style={item}>
             <strong>Questions.</strong> Jiacheng Hao (<a href={`mailto:${CONTACT_STUDENT}`}>{CONTACT_STUDENT}</a>),

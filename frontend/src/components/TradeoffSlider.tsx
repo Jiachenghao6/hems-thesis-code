@@ -31,10 +31,16 @@ interface Props {
   disabled?: boolean;
 }
 
+// The hints are plain description, not jargon: "high renewable share" is a phrase from
+// the energy literature, and a participant recruited off Prolific has no reason to know
+// it — many of them are not native English speakers either. "More wind and solar" says
+// the same thing and matches the wording the explanations already use.
+//
+// These must stay identical to the illustration in Tutorial.tsx.
 const SEGMENTS = [
-  { key: "cost" as const, label: "Cost", emoji: "💶", colour: "#2563eb", hint: "Cheapest hours" },
-  { key: "green" as const, label: "Green", emoji: "🌱", colour: "#16a34a", hint: "High renewable share" },
-  { key: "convenience" as const, label: "Convenience", emoji: "⏰", colour: "#d97706", hint: "Close to your routine" },
+  { key: "cost" as const, label: "Cost", emoji: "💶", colour: "#2563eb", hint: "The cheapest hours" },
+  { key: "green" as const, label: "Green", emoji: "🌱", colour: "#16a34a", hint: "More wind and solar" },
+  { key: "convenience" as const, label: "Convenience", emoji: "⏰", colour: "#d97706", hint: "Close to your usual time" },
 ];
 
 const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
@@ -144,7 +150,12 @@ export default function TradeoffSlider({ values, onChange, disabled }: Props) {
         </span>
       </div>
       <p style={{ margin: "0 0 12px", fontSize: 12, color: "#64748b" }}>
-        Drag the dividers to split your attention across the three. Giving more to one always takes it from another.
+        {/* Same words as the tutorial illustration: "the white lines between the
+            colours" names something the participant can see, where "the dividers"
+            names an interface part they have to identify first. And it is weight the
+            bar splits, not attention. */}
+        Drag the white lines between the colours to change the balance. Giving more to one always takes it from
+        another.
       </p>
 
       {/*

@@ -22,11 +22,16 @@
  */
 import { cardStyle, pageStyle } from "./ui";
 
-/** Mirrors the segment colours and order of the real control, so it is recognisable. */
+/**
+ * Mirrors the segment colours, order and wording of the real control, so it is
+ * recognisable. The notes have to match `TradeoffSlider` exactly — a participant who
+ * meets one phrase here and a different one on the task screen has to work out
+ * whether they mean the same thing, and that work has nothing to do with the study.
+ */
 const SEGMENTS = [
-  { label: "Cost", pct: 35, colour: "#2563eb", note: "cheapest hours" },
-  { label: "Green", pct: 30, colour: "#16a34a", note: "high renewable share" },
-  { label: "Convenience", pct: 35, colour: "#d97706", note: "close to your routine" },
+  { label: "Cost", pct: 35, colour: "#2563eb", note: "the cheapest hours" },
+  { label: "Green", pct: 30, colour: "#16a34a", note: "more wind and solar" },
+  { label: "Convenience", pct: 35, colour: "#d97706", note: "close to your usual time" },
 ];
 
 export default function Tutorial({ onStart }: { onStart: () => void }) {
@@ -51,26 +56,27 @@ export default function Tutorial({ onStart }: { onStart: () => void }) {
       <div style={cardStyle}>
         <h1 style={{ fontSize: 20, margin: "0 0 8px", fontWeight: 600 }}>Before you start</h1>
         <p style={{ fontSize: 14, color: "#64748b", lineHeight: 1.6, margin: "0 0 26px" }}>
-          The system suggests when to run household appliances, based on what matters most to you. Here is how it
-          works — it takes a minute to read.
+          Electricity costs a different amount at each hour of the day, and at some hours more of it comes from
+          wind and solar. This system uses that to suggest when to run your appliances. Here is what you will
+          do — about a minute to read.
         </p>
 
         <div style={step}>
           <div style={num}>1</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>You will see three situations.</strong> Each one is a different day, with its own electricity
-            prices across the 24 hours. For each day the system suggests a time to run four appliances: a
-            dishwasher, a washing machine, a water heater and an EV charger.
+            <strong>You will see three days.</strong> One after another. On each day you can see how the price
+            changes hour by hour, and the system suggests a time to run four appliances: a dishwasher, a washing
+            machine, a water heater and an EV charger.
           </div>
         </div>
 
         <div style={step}>
           <div style={num}>2</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>You set the priorities.</strong> Three things can matter when choosing a time — saving money,
-            using renewable electricity, and running the appliance close to when you normally would. They always
-            add up to 100%, so giving more to one means giving less to another. That is the point: it is a
-            trade-off, not a wish list.
+            <strong>You choose what matters.</strong> Three things can make one hour better than another: it is
+            cheaper, it is greener, or it is closer to when you would normally run the appliance. You decide how
+            much weight each one gets. The three always add up to 100%, so giving more to one means giving less
+            to the others.
           </div>
         </div>
 
@@ -114,26 +120,37 @@ export default function Tutorial({ onStart }: { onStart: () => void }) {
               </span>
             ))}
           </div>
+          {/*
+            "Drag the white lines between the colours" rather than "drag either of the
+            two dividers": a participant looking at the bar sees colours and gaps, not
+            an interface element called a divider, and on a phone nothing says the bar
+            can be touched at all unless the sentence points at something visible.
+
+            It must not say what changes when the bar moves. The suggested times update
+            in both conditions, so that part would be true either way — but a sentence
+            telling people to watch for things updating turns the manipulation check at
+            the end into a test of whether they followed an instruction.
+          */}
           <p style={{ fontSize: 13, color: "#64748b", margin: "12px 0 0", lineHeight: 1.6 }}>
-            Drag either of the two dividers to change the balance. You can also use the arrow keys once a divider is
-            focused. Adjust it as often as you like — there is no single correct setting.
+            Drag the white lines between the colours to shift the balance; the arrow keys work too. Change it as
+            often as you like — there is no correct setting.
           </p>
         </div>
 
         <div style={step}>
           <div style={num}>3</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>You decide on each suggestion.</strong> Alongside each suggested time you will see an
-            explanation of why the system picked it. Accept the ones you would actually follow and reject the ones
-            you would not — rejecting is a perfectly good answer, and we are just as interested in those.
+            <strong>You accept or reject each suggestion.</strong> Next to every suggested time there is an
+            explanation of why the system chose it. Accept the times you would really use, reject the ones you
+            would not. Rejecting is just as useful to us as accepting.
           </div>
         </div>
 
         <div style={step}>
           <div style={num}>4</div>
           <div style={{ fontSize: 14, lineHeight: 1.6 }}>
-            <strong>Then a short questionnaire.</strong> A few questions about how the task felt and what you made
-            of the system. There are no right or wrong answers anywhere in this study.
+            <strong>Then some questions.</strong> About how the task felt and what you thought of the system.
+            Nothing in this study has a right or wrong answer.
           </div>
         </div>
 
@@ -149,8 +166,8 @@ export default function Tutorial({ onStart }: { onStart: () => void }) {
             marginTop: 4,
           }}
         >
-          Take your time — the study is not timed, and working through it at your normal pace is exactly what we
-          need. Please stay in this window until the end so your submission is recorded.
+          Take your time — nothing here is timed. Please stay in this window until the end, so your submission is
+          recorded.
         </div>
 
         <button
