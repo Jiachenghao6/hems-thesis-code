@@ -16,3 +16,4 @@ assignments.jsonl
 survey_responses*.jsonl
 .env.local
 .env.*.local
+backups/
