@@ -15,6 +15,7 @@ session_service.py — 被试分组与任务序列
 from __future__ import annotations
 
 import json
+import os
 import random
 import secrets
 from datetime import datetime, timezone
@@ -142,6 +143,29 @@ def _next_cell(cell_counts: dict[tuple[str, str], int]) -> tuple[str, str]:
     return random.choice(available)
 
 
+def _pilot_cell(n_assigned: int) -> tuple[str, str] | None:
+    """
+    定性访谈专用：按 PILOT_CELL_SEQUENCE 给第 n 个人指定格子，用完后回到区组随机化。
+
+    格式 "A:accept_first,B:accept_first,..."。只由 start-pilot.ps1 设置（独立 DATA_DIR），
+    正式实验的部署从不设置它，因此正式分组路径不受影响。
+
+    为什么需要：访谈 n=6、每组 3 人。区组大小是 4，六个人里第二个区组只用两格，
+    有 1/3 的概率两格同条件，变成 4:2。按人挑条件更糟——研究者会按"这个人看得懂图"
+    去分。事先写死顺序，两样问题都没有。只决定谁看哪一版，不改变任何人看到的内容。
+    """
+    raw = os.environ.get("PILOT_CELL_SEQUENCE", "").strip()
+    if not raw:
+        return None
+    seq = []
+    for part in raw.split(","):
+        cond, _, order = part.strip().partition(":")
+        if cond not in CONDITIONS or order not in OPTION_ORDERS:
+            raise ValueError(f"PILOT_CELL_SEQUENCE: bad entry {part!r}")
+        seq.append((cond, order))
+    return seq[n_assigned] if n_assigned < len(seq) else None
+
+
 def _find_existing(prolific_pid: str) -> dict | None:
     """已经分过组的 Prolific ID 直接返回原分配。见 assign_session 的幂等说明。"""
     if not prolific_pid or not ASSIGNMENT_LOG.exists():
@@ -188,7 +212,8 @@ def assign_session(prolific_pid: str | None = None) -> dict:
                 }
 
         cell_counts = _read_cell_counts()
-        condition, option_order = _next_cell(cell_counts)
+        condition, option_order = (_pilot_cell(sum(cell_counts.values()))
+                                   or _next_cell(cell_counts))
         participant_id = "p_" + secrets.token_hex(6)
 
         record = {

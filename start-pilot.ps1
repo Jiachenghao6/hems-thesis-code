@@ -1,4 +1,4 @@
-# start-pilot.ps1 - serve the study and expose it on a temporary public URL.
+﻿# start-pilot.ps1 - serve the study and expose it on a temporary public URL.
 #
 # For the pilot with friends, before the study is properly hosted. Run it, send the
 # printed URL to one friend at a time, and keep this window open while they work:
@@ -21,6 +21,11 @@ New-Item -ItemType Directory -Force $DataDir, $LogDir | Out-Null
 # internet while the tunnel is open, and they return participant data.
 $env:RESEARCHER_TOKEN = [guid]::NewGuid().ToString("N")
 $env:DATA_DIR = $DataDir
+
+# Qualitative interviews: fixed order P1..P6 = A, B, A, B, A, B (3 per condition, option
+# order balanced within each). See _pilot_cell in backend/session_service.py.
+# After six sessions the backend falls back to block randomisation.
+$env:PILOT_CELL_SEQUENCE = "A:accept_first,B:accept_first,A:reject_first,B:reject_first,A:accept_first,B:reject_first"
 
 $busy = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
 if ($busy) { Stop-Process -Id $busy.OwningProcess -Force; Start-Sleep -Seconds 1 }
