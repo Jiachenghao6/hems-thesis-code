@@ -3,14 +3,14 @@ explainer.py
 Generates two types of explanation for a scheduling recommendation.
 
 Group A — Interactive causal explanation (natural language, updates with slider)
-Group B — Static SHAP-style feature importance data (fixed at recommendation time)
+Group B — Feature-attribution chart: exact per-factor contributions relative to the usual time (updates with slider)
 
 Design principles
 -----------------
 • No SHAP numbers or technical jargon in Group A explanations
 • Group A uses counterfactual framing: "if you increase X, the system would..."
-• Group B SHAP values are mock-computed from the optimiser's score breakdown —
-  sufficient for the demo; a real deployment would call shap.TreeExplainer.
+• Group B values decompose the optimiser's weighted score exactly (see generate_shap_data);
+  the first-run version used mock values and was replaced for the 2026-10 rerun.
 """
 
 from __future__ import annotations
@@ -153,67 +153,64 @@ def generate_causal_explanation(
     return f"{sentence1} {sentence2}"
 
 
-# ── Group B: Static SHAP-style data (generated once per recommendation) ─────
+# ── Group B: feature-attribution chart (exact decomposition, 2026-10 rerun) ──
+#
+# History. The chart used in the first run (20 Sep 2026) was mock data: cost and
+# convenience each appeared twice, an "Hour of day" factor was shown although the
+# optimiser does not use it, and bar colours came from fixed thresholds. A check of
+# the 288 charts participants saw found at least one real factor with the wrong sign
+# in 65% of them (analyse_shap_fidelity.py). Condition B is rerun with this version.
+#
+# What a bar means now. The optimiser picks the start hour with the highest weighted
+# sum  w_cost*s_cost + w_green*s_green + w_conv*s_conv.  Taking the participant's
+# usual start time as the baseline, the score difference between the recommended
+# and the usual slot splits exactly into one term per factor:
+#     contribution_i = w_i * (s_i(recommended) - s_i(usual))
+# The three bars are these terms. Positive = the factor favoured the recommended
+# time over the usual one (green); negative = it favoured the usual time (red).
+# The bars sum to the total score difference, so nothing is invented or duplicated.
+# (For an additive model with the usual slot as reference input this coincides with
+# the SHAP value of each factor, but no SHAP library is involved.)
 
-def generate_shap_data(rec: dict, weights: dict) -> list[dict]:
+FACTOR_LABELS = {
+    "cost": "Cost — electricity price",
+    "green": "Green — renewable share",
+    "convenience": "Convenience — usual time",
+}
+
+
+def generate_shap_data(rec: dict, weights: dict | None = None) -> list[dict]:
     """
-    Produce mock SHAP feature-contribution data for a bar-chart display.
+    Exact per-factor contributions for the condition-B bar chart.
 
-    Each entry:  {feature, label, value, direction}
-    • value    : contribution magnitude (0–1 scale)
-    • direction: 'positive' (supports recommendation) or 'negative' (works against)
+    Each entry: {feature, label, value, direction}
+    • value     : |w_i * (s_i(recommended) - s_i(usual))|, rounded to 3 decimals
+    • direction : 'positive' (favours the recommended time), 'negative'
+                  (favours the usual time) or 'neutral' (exactly zero)
 
-    Values are derived from the optimiser's internal score breakdown so they
-    are self-consistent without requiring a real SHAP explainer.
+    `weights` is accepted for backwards compatibility but ignored: the unrounded
+    weights the optimiser actually used are taken from the recommendation itself,
+    so the chart decomposes exactly the decision that was made.
     """
-    scores = rec.get("scores", {})
-    cost_s = scores.get("cost_score", 0.5)
-    green_s = scores.get("green_score", 0.5)
-    conv_s = scores.get("convenience_score", 0.5)
+    w = rec["weights_exact"]
+    s_rec = rec["component_scores_recommended"]
+    s_use = rec["component_scores_usual"]
 
-    w_cost = weights.get("cost", 1 / 3)
-    w_green = weights.get("green", 1 / 3)
-    w_conv = weights.get("convenience", 1 / 3)
+    features = []
+    for key in ("cost", "green", "convenience"):
+        contrib = w[key] * (s_rec[key] - s_use[key])
+        if abs(contrib) < 1e-9:
+            direction = "neutral"
+        else:
+            direction = "positive" if contrib > 0 else "negative"
+        features.append({
+            "feature": key,
+            "label": FACTOR_LABELS[key],
+            "value": round(abs(contrib), 3),
+            "signed_value": contrib,          # unrounded, for logging and fidelity checks
+            "direction": direction,
+        })
 
-    features = [
-        {
-            "feature": "electricity_price",
-            "label": "Electricity price level",
-            "value": round(cost_s * w_cost, 3),
-            "direction": "positive" if cost_s > 0.5 else "negative",
-        },
-        {
-            "feature": "cost_weight",
-            "label": "Cost priority (slider)",
-            "value": round(w_cost * cost_s * 0.8, 3),
-            "direction": "positive" if w_cost >= 1 / 3 else "negative",
-        },
-        {
-            "feature": "green_weight",
-            "label": "Green priority (slider)",
-            "value": round(w_green * green_s * 0.8, 3),
-            "direction": "positive" if w_green >= 1 / 3 else "negative",
-        },
-        {
-            "feature": "convenience_weight",
-            "label": "Convenience priority (slider)",
-            "value": round(w_conv * conv_s * 0.8, 3),
-            "direction": "positive" if w_conv >= 1 / 3 else "negative",
-        },
-        {
-            "feature": "appliance_habit",
-            "label": "Appliance run-time habit",
-            "value": round(conv_s * 0.4, 3),
-            "direction": "positive" if conv_s > 0.4 else "negative",
-        },
-        {
-            "feature": "hour_of_day",
-            "label": "Hour of day",
-            "value": round(0.08 + cost_s * 0.12, 3),
-            "direction": "positive",
-        },
-    ]
-
-    # Sort by absolute value descending (most influential first)
-    features.sort(key=lambda x: x["value"], reverse=True)
+    # Largest contribution first; ties keep the fixed order cost, green, convenience.
+    features.sort(key=lambda x: abs(x["signed_value"]), reverse=True)
     return features

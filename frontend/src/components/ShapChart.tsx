@@ -1,7 +1,10 @@
 /**
- * ShapChart.tsx — Group B (static SHAP explanation)
- * Horizontal bar chart showing feature contributions.
- * Fixed at recommendation time — does NOT update when the slider moves.
+ * ShapChart.tsx — Group B feature-attribution chart.
+ * One bar per factor (cost, green, convenience): the factor's exact contribution to
+ * choosing the recommended time over the usual time (backend explainer.generate_shap_data).
+ * Green = favoured the recommended time, red = favoured the usual time, grey = zero.
+ * Redrawn whenever the priorities change, like the condition-A text.
+ * 2026-10 rerun: the first-run version showed six mock bars; see explainer.py.
  */
 import type { ShapFeature } from "../types";
 
@@ -51,8 +54,9 @@ export default function ShapChart({ features }: Props) {
         {features.map((feat, i) => {
           const y = i * (BAR_H + GAP) + 4;
           const isPos = feat.direction === "positive";
+          const isZero = feat.direction === "neutral";
           const barW = (feat.value / maxVal) * BAR_MAX_W;
-          const color = isPos ? "#16a34a" : "#dc2626";
+          const color = isZero ? "#94a3b8" : isPos ? "#16a34a" : "#dc2626";
           const barX = LABEL_W + 5;
 
           return (
@@ -87,7 +91,7 @@ export default function ShapChart({ features }: Props) {
                 fill={color}
                 fontWeight={600}
               >
-                {isPos ? "+" : "−"}{feat.value.toFixed(3)}
+                {isZero ? "" : isPos ? "+" : "−"}{feat.value.toFixed(3)}
               </text>
             </g>
           );

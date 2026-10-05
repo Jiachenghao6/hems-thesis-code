@@ -135,6 +135,20 @@ def optimize_schedule(
 
     recommendations: list[dict] = []
 
+    def component_scores(start: int, app: dict) -> tuple[float, float, float]:
+        """Cost, green and convenience scores (each 0–1) of one start hour — the
+        same formulas the search loop below uses, so the condition-B chart can
+        decompose the choice exactly (see explainer.generate_shap_data)."""
+        dur = app["duration_hours"]
+        avg_price = _slot_avg_price(prices, start, dur)
+        cost_score = (price_hi - avg_price) / price_span
+        if use_real_green:
+            green_score = (_slot_avg_renewable(renewable_shares, start, dur) - renew_lo) / renew_span
+        else:
+            green_score = cost_score
+        convenience_score = max(0.0, 1.0 - abs(start - app["default_start"]) / 8.0)
+        return cost_score, green_score, convenience_score
+
     for app in appliances:
         dur = app["duration_hours"]
         # Only consider slots that finish by latest_finish
@@ -183,6 +197,11 @@ def optimize_schedule(
                     "weighted_total": round(total, 3),
                 }
 
+        # Component scores at the usual slot: the baseline of the condition-B chart.
+        # Unrounded, so that the chart's bars add up exactly to the score difference.
+        rec_c, rec_g, rec_v = component_scores(best_start, app)
+        use_c, use_g, use_v = component_scores(app["default_start"], app)
+
         # Default-slot economics
         default_avg = _slot_avg_price(prices, app["default_start"], dur)
         recommended_avg = _slot_avg_price(prices, best_start, dur)
@@ -215,6 +234,9 @@ def optimize_schedule(
                 "renewable_share_recommended": round(rec_renew, 3) if rec_renew is not None else None,
                 "renewable_share_default": round(def_renew, 3) if def_renew is not None else None,
                 "scores": score_breakdown,
+                "component_scores_recommended": {"cost": rec_c, "green": rec_g, "convenience": rec_v},
+                "component_scores_usual": {"cost": use_c, "green": use_g, "convenience": use_v},
+                "weights_exact": dict(weights),
                 "weights_used": {k: round(v, 3) for k, v in weights.items()},
             }
         )

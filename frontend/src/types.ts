@@ -25,7 +25,8 @@ export interface ShapFeature {
   feature: string;
   label: string;
   value: number;
-  direction: "positive" | "negative";
+  direction: "positive" | "negative" | "neutral";
+  signed_value?: number;
 }
 
 export interface Recommendation {

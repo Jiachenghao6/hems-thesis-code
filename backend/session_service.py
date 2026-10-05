@@ -166,6 +166,51 @@ def _pilot_cell(n_assigned: int) -> tuple[str, str] | None:
     return seq[n_assigned] if n_assigned < len(seq) else None
 
 
+def _forced_condition() -> str | None:
+    """
+    2026-10 rerun of condition B only (supervisor's decision, 05 Oct 2026).
+
+    STUDY_FORCE_CONDITION=B sends every new participant to condition B; block
+    randomisation then runs over the two button orders only, so they stay balanced.
+    Set only on the rerun deployment, which also uses its own DATA_DIR, so the
+    first run's ledger is neither read nor written.
+    """
+    raw = os.environ.get("STUDY_FORCE_CONDITION", "").strip()
+    if not raw:
+        return None
+    if raw not in CONDITIONS:
+        raise ValueError(f"STUDY_FORCE_CONDITION: bad value {raw!r}")
+    return raw
+
+
+def _next_cell_forced(cell_counts: dict[tuple[str, str], int], condition: str) -> tuple[str, str]:
+    cells = [(condition, o) for o in OPTION_ORDERS]
+    total = sum(cell_counts.get(c, 0) for c in cells)
+    quota = total // len(cells) + 1
+    available = [c for c in cells if cell_counts.get(c, 0) < quota] or cells
+    return random.choice(available)
+
+
+def _in_previous_run(prolific_pid: str) -> bool:
+    """
+    True if this Prolific ID is in the first run's ledger (PREVIOUS_LEDGER, a read-only
+    copy). Prolific's exclusion list should already keep such people out; this is the
+    second line of defence. They are not turned away (that would need a new screen);
+    the record is flagged and the analysis excludes them.
+    """
+    path = os.environ.get("PREVIOUS_LEDGER", "").strip()
+    if not prolific_pid or not path or not os.path.exists(path):
+        return False
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            try:
+                if json.loads(line).get("prolific_pid") == prolific_pid:
+                    return True
+            except json.JSONDecodeError:
+                continue
+    return False
+
+
 def _find_existing(prolific_pid: str) -> dict | None:
     """已经分过组的 Prolific ID 直接返回原分配。见 assign_session 的幂等说明。"""
     if not prolific_pid or not ASSIGNMENT_LOG.exists():
@@ -212,8 +257,12 @@ def assign_session(prolific_pid: str | None = None) -> dict:
                 }
 
         cell_counts = _read_cell_counts()
-        condition, option_order = (_pilot_cell(sum(cell_counts.values()))
-                                   or _next_cell(cell_counts))
+        forced = _forced_condition()
+        if forced:
+            condition, option_order = _next_cell_forced(cell_counts, forced)
+        else:
+            condition, option_order = (_pilot_cell(sum(cell_counts.values()))
+                                       or _next_cell(cell_counts))
         participant_id = "p_" + secrets.token_hex(6)
 
         record = {
@@ -224,6 +273,9 @@ def assign_session(prolific_pid: str | None = None) -> dict:
             "assigned_at": datetime.now(timezone.utc).isoformat(),
             "seq": sum(cell_counts.values()) + 1,
         }
+        if forced:
+            record["wave"] = "rerun_b_2026_10"
+            record["previous_run_participant"] = _in_previous_run(prolific_pid or "")
         _ensure_trailing_newline()
         with ASSIGNMENT_LOG.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, ensure_ascii=False) + "\n")
