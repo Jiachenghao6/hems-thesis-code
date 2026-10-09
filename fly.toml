@@ -19,7 +19,14 @@ primary_region = "fra"          # Frankfurt — the data stays inside the EU
     VITE_PROLIFIC_COMPLETION_CODE = ""
 
 [env]
-  DATA_DIR = "/data"
+  # 2026-10 rerun of condition B only (Wörndl, 05 Oct 2026). The first run's files stay
+  # in /data and are only read (PREVIOUS_LEDGER, to flag returning participants); the
+  # rerun writes to its own folder. session_service.check_rerun_config() refuses to
+  # start if these three are inconsistent. First-run deploy: DATA_DIR = "/data", no
+  # STUDY_FORCE_CONDITION, no PREVIOUS_LEDGER.
+  DATA_DIR = "/data/rerun_b"
+  STUDY_FORCE_CONDITION = "B"
+  PREVIOUS_LEDGER = "/data/assignments.jsonl"
   FRONTEND_DIST = "/app/frontend/dist"
   PORT = "8080"
 
