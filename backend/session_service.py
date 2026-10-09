@@ -183,6 +183,27 @@ def _forced_condition() -> str | None:
     return raw
 
 
+def check_rerun_config() -> None:
+    """
+    Fail fast at start-up if the rerun switches are set inconsistently. Called once at
+    import, so a misconfigured deploy never starts serving instead of serving wrongly.
+
+    The dangerous mistake is forcing condition B while still writing to the first run's
+    files: the new participants would be appended to the first run's ledger, event log
+    and questionnaire file.
+    """
+    forced = _forced_condition()          # raises on a bad value
+    if not forced:
+        return
+    prev = os.environ.get("PREVIOUS_LEDGER", "").strip()
+    if not prev:
+        raise RuntimeError("STUDY_FORCE_CONDITION is set but PREVIOUS_LEDGER is not")
+    if not os.path.exists(prev):
+        raise RuntimeError(f"PREVIOUS_LEDGER does not exist: {prev}")
+    if os.path.realpath(prev) == os.path.realpath(str(ASSIGNMENT_LOG)):
+        raise RuntimeError("PREVIOUS_LEDGER is the current ledger: set DATA_DIR to a new folder")
+
+
 def _next_cell_forced(cell_counts: dict[tuple[str, str], int], condition: str) -> tuple[str, str]:
     cells = [(condition, o) for o in OPTION_ORDERS]
     total = sum(cell_counts.get(c, 0) for c in cells)
@@ -299,3 +320,6 @@ def assignment_summary() -> dict:
         "total": sum(counts.values()),
         "block_size": BLOCK_SIZE,
     }
+
+
+check_rerun_config()

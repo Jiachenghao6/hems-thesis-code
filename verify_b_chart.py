@@ -129,7 +129,7 @@ def main() -> int:
                     continue
                 for f in chart:
                     d = delta[f["feature"]]
-                    want_dir = "neutral" if abs(d) < 1e-9 else ("positive" if d > 0 else "negative")
+                    want_dir = "neutral" if round(abs(d), 3) == 0 else ("positive" if d > 0 else "negative")
                     if f["direction"] != want_dir:
                         fails.append(f"{where}: {f['feature']} shown {f['direction']}, true {d:+.4f}")
                     if f["value"] != round(abs(d), 3):

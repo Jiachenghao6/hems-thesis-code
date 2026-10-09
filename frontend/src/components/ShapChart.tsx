@@ -101,9 +101,12 @@ export default function ShapChart({ features }: Props) {
         <text x={LABEL_W + 5} y={totalH - 2} textAnchor="middle" fontSize={9} fill="#94a3b8">
           0
         </text>
-        <text x={LABEL_W + 5 + BAR_MAX_W} y={totalH - 2} textAnchor="end" fontSize={9} fill="#94a3b8">
-          +{maxVal.toFixed(2)}
-        </text>
+        {/* No scale label when every bar is zero: "+0.01" would invent a range. */}
+        {features.some((f) => f.direction !== "neutral") && (
+          <text x={LABEL_W + 5 + BAR_MAX_W} y={totalH - 2} textAnchor="end" fontSize={9} fill="#94a3b8">
+            +{maxVal.toFixed(2)}
+          </text>
+        )}
       </svg>
     </div>
   );

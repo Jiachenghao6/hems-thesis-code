@@ -199,14 +199,17 @@ def generate_shap_data(rec: dict, weights: dict | None = None) -> list[dict]:
     features = []
     for key in ("cost", "green", "convenience"):
         contrib = w[key] * (s_rec[key] - s_use[key])
-        if abs(contrib) < 1e-9:
+        shown = round(abs(contrib), 3)
+        # A contribution that rounds to 0.000 is drawn as zero (grey, no sign): a red
+        # "−0.000" bar would state a direction the displayed number cannot show.
+        if shown == 0:
             direction = "neutral"
         else:
             direction = "positive" if contrib > 0 else "negative"
         features.append({
             "feature": key,
             "label": FACTOR_LABELS[key],
-            "value": round(abs(contrib), 3),
+            "value": shown,
             "signed_value": contrib,          # unrounded, for logging and fidelity checks
             "direction": direction,
         })

@@ -76,6 +76,7 @@ def main() -> int:
     n = 0
     max_err = 0.0
     sign_mismatch = 0
+    boundary = 0
     worst = None
     for scen in scenarios:
         prices, renew = get_scenario_prices(scen), get_scenario_renewable(scen)
@@ -92,13 +93,21 @@ def main() -> int:
                     err = abs(sv[i] - bars[k])
                     if err > max_err:
                         max_err, worst = err, (scen, rec["appliance_id"], (c, g, v), k, sv[i], bars[k])
-                    if np.sign(round(sv[i], 9)) != np.sign(round(bars[k], 9)):
-                        sign_mismatch += 1
+                    shown = next(b for b in generate_shap_data(rec) if b["feature"] == k)
+                    want = "neutral" if round(abs(sv[i]), 3) == 0 else ("positive" if sv[i] > 0 else "negative")
+                    if shown["direction"] != want:
+                        # A true value of exactly ±0.0005 sits on the rounding boundary; the
+                        # library and the closed form differ there by ~1e-16, which flips
+                        # round() between 0.000 and 0.001. Not a display error.
+                        if abs(abs(sv[i]) - 0.0005) < 1e-12:
+                            boundary += 1
+                        else:
+                            sign_mismatch += 1
                 n += 1
 
     print(f"shap {shap.__version__} · scenarios {scenarios} · weight step {step} · recommendations {n}")
     print(f"largest |shap − bar| over all factors: {max_err:.2e}")
-    print(f"sign mismatches: {sign_mismatch}")
+    print(f"sign mismatches: {sign_mismatch} (plus {boundary} at the exact ±0.0005 rounding boundary)")
     if worst:
         print("worst case:", worst)
     ok = max_err < 1e-9 and sign_mismatch == 0
