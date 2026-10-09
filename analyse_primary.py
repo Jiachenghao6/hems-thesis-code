@@ -6,6 +6,14 @@ and nothing else. If the plan changes, the change goes into the plan's change lo
 then here — never the other way round.
 
     python analyse_primary.py backups/study-backup-20260930T200006Z.json [out.md]
+    python analyse_primary.py <first-run backup> [out.md] --rerun-b <rerun backup>
+
+`--rerun-b` implements change 1 of the plan (2026-10-06, written before the rerun data
+existed): the analysed sample is condition A from the first run plus condition B from the
+rerun; first-run condition B is dropped, and rerun participants flagged
+`previous_run_participant` are dropped before any other rule is applied. Every other rule,
+test and output is unchanged. Without the flag the script reproduces the first-run
+analysis exactly.
 
 Writes a Markdown report to stdout (and to out.md if given). The report contains no
 Prolific IDs or participant ids.
@@ -48,6 +56,26 @@ def load(path: Path):
         if f.get("damaged"):
             raise SystemExit(f"{name}: server reported damaged lines — stop and inspect")
     return files["assignments"]["rows"], files["events"]["rows"], files["survey"]["rows"]
+
+
+def combine_rerun(first, rerun):
+    """Plan change 1: first-run A + rerun B (unflagged). Returns merged rows and the flag count."""
+    a1, e1, s1 = first
+    a2, e2, s2 = rerun
+    keep1 = {r["participant_id"] for r in a1 if r["condition"] == "A"}
+    keep2 = {r["participant_id"] for r in a2
+             if r["condition"] == "B" and not r.get("previous_run_participant", False)}
+    flagged = sum(1 for r in a2 if r.get("previous_run_participant", False))
+    if keep1 & keep2:
+        raise SystemExit("participant ids overlap between runs - stop and inspect")
+    if any(r["condition"] != "B" for r in a2):
+        raise SystemExit("rerun ledger contains a condition other than B - stop and inspect")
+    merged = (
+        [r for r in a1 if r["participant_id"] in keep1] + [r for r in a2 if r["participant_id"] in keep2],
+        [e for e in e1 if e["participant_id"] in keep1] + [e for e in e2 if e["participant_id"] in keep2],
+        [s for s in s1 if s["participant_id"] in keep1] + [s for s in s2 if s["participant_id"] in keep2],
+    )
+    return merged, flagged
 
 
 def last_row_per_page(survey):
@@ -128,8 +156,19 @@ def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
         return 1
-    src = Path(sys.argv[1])
+    args = sys.argv[1:]
+    rerun_src = None
+    if "--rerun-b" in args:
+        i = args.index("--rerun-b")
+        rerun_src = Path(args[i + 1])
+        del args[i:i + 2]
+    src = Path(args[0])
+    out_path = Path(args[1]) if len(args) > 1 else None
     assignments, events, survey = load(src)
+    flagged = 0
+    if rerun_src:
+        (assignments, events, survey), flagged = combine_rerun(
+            (assignments, events, survey), load(rerun_src))
     cond = {r["participant_id"]: r["condition"] for r in assignments}
     order = {r["participant_id"]: r["option_order"] for r in assignments}
     pages = last_row_per_page(survey)
@@ -147,7 +186,12 @@ def main() -> int:
     grp = {c: [p for p in sample if cond[p] == c] for c in ("A", "B")}
 
     w(f"# Main study — locked analysis output\n")
-    w(f"Source: `{src.name}` · plan: `ANALYSIS_PLAN.md` (commit 5214be9)\n")
+    if rerun_src:
+        w(f"Source: condition A from `{src.name}`, condition B from `{rerun_src.name}` · plan: "
+          f"`ANALYSIS_PLAN.md` (commit 5214be9) with change 1 (2026-10-06) · rerun participants "
+          f"excluded as previous-run participants: {flagged}\n")
+    else:
+        w(f"Source: `{src.name}` · plan: `ANALYSIS_PLAN.md` (commit 5214be9)\n")
     w("## 1. Sample\n")
     w(f"| | A | B | total |\n|---|---|---|---|")
     for label, ids in [("assigned", list(cond)), ("completed all survey pages", completers),
@@ -278,8 +322,8 @@ def main() -> int:
     report = "\n".join(lines) + "\n"
     sys.stdout.reconfigure(encoding="utf-8")
     print(report)
-    if len(sys.argv) > 2:
-        Path(sys.argv[2]).write_text(report, encoding="utf-8")
+    if out_path:
+        out_path.write_text(report, encoding="utf-8")
     return 0
 
 
