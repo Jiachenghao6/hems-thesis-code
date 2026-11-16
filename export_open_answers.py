@@ -40,13 +40,13 @@ def main() -> int:
         return " ".join(str(s).split()).replace("|", "/")
 
     blind = [
-        "# 开放回答 · 盲编码用",
+        "# Open answers - for blind coding",
         "",
-        f"> {len(sample)} 条（分析样本）。随机顺序、无组别。**全部编完标签之前不要打开 `open_answers_KEY.md`。**",
-        "> 题目：*In one sentence: what made you trust — or not trust — the recommendations?*",
-        "> 标签写短语，一条回答可以贴多个标签，用「；」隔开。回答原样保留，拼写错误不改。",
+        f"> {len(sample)} answers (analysis sample). Random order, no condition. **Do not open `open_answers_KEY.md` before all labels are coded.**",
+        "> Question: *In one sentence: what made you trust — or not trust — the recommendations?*",
+        "> Labels are short phrases; one answer can have several labels, separated by ';'. Answers are kept verbatim, spelling errors included.",
         "",
-        "| 编号 | 回答 | 标签 |",
+        "| ID | Answer | Labels |",
         "|---|---|---|",
     ]
     for p in sample:
@@ -54,17 +54,17 @@ def main() -> int:
     others = [(code[p], pages[p]["checks"].get("why_decide_other", "")) for p in sample]
     others = [(c, t) for c, t in others if str(t).strip()]
     if others:
-        blind += ["", "## 附：「Something else」里填的文字（why_decide）", "",
-                  "| 编号 | 文字 | 标签 |", "|---|---|---|"]
+        blind += ["", "## Appendix: text entered under 'Something else' (why_decide)", "",
+                  "| ID | Text | Labels |", "|---|---|---|"]
         blind += [f"| {c} | {clean(t)} | |" for c, t in others]
 
-    key = ["# 钥匙：编号 → 组别（编码全部完成后才打开）", "", "| 编号 | 组别 |", "|---|---|"]
+    key = ["# Key: ID -> condition (open only after all coding is complete)", "", "| ID | Condition |", "|---|---|"]
     key += [f"| {code[p]} | {cond[p]} |" for p in sorted(sample, key=lambda p: code[p])]
     for item in ("why_decide", "what_confused"):
         counts = {c: Counter(v for p in sample if cond[p] == c for v in pages[p]["checks"][item]) for c in "AB"}
         n = {c: sum(cond[p] == c for p in sample) for c in "AB"}
-        key += ["", f"## 封闭题 `{item}` 按组计数（A n={n['A']}，B n={n['B']}；多选题一人可计多次）", "",
-                "| 选项 | A | B |", "|---|---|---|"]
+        key += ["", f"## Closed item `{item}` counts by condition (A n={n['A']}, B n={n['B']}; in multi-select items one person can count more than once)", "",
+                "| Option | A | B |", "|---|---|---|"]
         for v in sorted(set(counts["A"]) | set(counts["B"])):
             key.append(f"| {v} | {counts['A'][v]} | {counts['B'][v]} |")
 
