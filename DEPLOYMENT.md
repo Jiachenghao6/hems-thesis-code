@@ -1,118 +1,119 @@
-# 上线方案（2026-09-09）
+# Deployment plan (2026-09-09)
 
-> TL;DR：① 前后端**打成一个镜像、一个 URL**，同源之后 CORS 问题消失、证书只用管一张。
-> ② 推荐 **Fly.io + 法兰克福 + 持久卷**，约 **€8–10 跑完整个实验期**（Fly 已无免费额度，别说"免费"）。
-> ③ **绝对只能跑一个实例**——分组台账靠数点行数做区组随机化，两个实例会各记一半、两组悄悄失衡。
+> TL;DR: (1) Frontend and backend are **built into one image behind one URL**. Same origin removes CORS issues, and only one certificate is needed.
+> (2) Recommended: **Fly.io + Frankfurt + persistent volume**, about **EUR 8-10 for the whole study period** (Fly.io no longer has a free tier).
+> (3) **Run exactly one instance.** Block randomisation counts lines in the assignment ledger; two instances would each record half and the groups would silently become unbalanced.
 
 ---
 
-## 1. 为什么必须托管
+## 1. Why hosting is required
 
-Prolific 只负责把人送到你给的一个网址。**任务本体在你的 app 里**，所以 app 必须有公网地址。这一步没有替代方案。
+Prolific only sends participants to a URL. **The task itself runs in this app**, so the app needs a public address.
 
-三条硬约束：
+Three hard constraints:
 
-| 约束 | 原因 |
+| Constraint | Reason |
 |---|---|
-| **服务器在欧盟** | 数据跨境会让现在的轻量 GDPR 论证（"匿名、只有 Prolific ID、自评估"）复杂化 |
-| **URL 实验期间不能变** | 链接已经写进 Prolific study，换地址等于把正在参与的人扔到 404 |
-| **重启不能丢数据** | 三个 jsonl 是全部数据集，没有第二份 |
+| **Server in the EU** | Cross-border data transfer would complicate the lightweight GDPR argument (anonymous, Prolific ID only, self-assessment) |
+| **URL must not change during the study** | The link is configured in the Prolific study; changing it sends active participants to a 404 |
+| **Restarts must not lose data** | The three JSONL files are the entire dataset; there is no second copy |
 
 ---
 
-## 2. 平台对比（2026-09-09 核实）
+## 2. Platform comparison (checked 2026-09-09)
 
-| 平台 | 价格 | EU | 持久盘 | 结论 |
+| Platform | Price | EU | Persistent disk | Verdict |
 |---|---|---|---|---|
-| **Fly.io** ✅ | shared-cpu-1x/512MB 常开约 **$3.32/月**；卷 **$0.15/GB·月** | `fra` 法兰克福 | ✅ 卷 | **推荐**。能钉死单实例、能选区域、卷是一等公民 |
-| Hetzner Cloud | CX 系列约 **€4/月** | 德国（纽伦堡/法尔肯施泰因） | ✅ 整台 VPS | 最便宜也最可控，但操作系统、TLS、反代全归你 |
-| Render | 免费档有 web service | 法兰克福 | ❌ **免费档无持久盘，且闲置会休眠** | ❌ 淘汰：冷启动会超时掉被试，无盘会丢数据 |
-| Railway | 用量计费 | 有 EU 区 | ✅ | 可用，但默认会横向扩，要手动锁死 |
-| **教席服务器** | 免费 | ✅ | ✅ | **最优解，如果有**。已建议写进给 Wörndl 的信里问 |
+| **Fly.io** (chosen) | shared-cpu-1x/512MB always on, about **$3.32/month**; volume **$0.15/GB-month** | `fra` Frankfurt | Yes (volume) | **Recommended.** Single instance can be pinned, region can be chosen, volumes are first-class |
+| Hetzner Cloud | CX series about **EUR 4/month** | Germany (Nuremberg/Falkenstein) | Yes (full VPS) | Cheapest and most controllable, but OS, TLS and reverse proxy are all self-managed |
+| Render | Free tier for web services | Frankfurt | **No persistent disk on the free tier, and idle services sleep** | Rejected: cold starts time out participants, no disk loses data |
+| Railway | Usage-based | EU region available | Yes | Usable, but scales horizontally by default and must be locked manually |
+| **Chair server** | Free | Yes | Yes | **Best option if available** |
 
-**成本量级**：两个月约 **€8–10**。和 Prolific 的 €230 比可以忽略，但**不是零**——Fly.io 现在没有免费额度，写进预算信时要如实说。
-
----
-
-## 3. 部署结构
-
-```
-┌─ 一个 Fly 应用（fra）────────────────────┐
-│  FastAPI                                │
-│   ├── /api/*        实验接口             │
-│   ├── /health       健康检查             │
-│   └── /*            前端 dist（同源）    │
-│                                          │
-│  /data （持久卷）                        │
-│   ├── assignments.jsonl      分组台账     │
-│   ├── experiment_log.jsonl   行为日志     │
-│   └── survey_responses.jsonl 问卷答案     │
-└──────────────────────────────────────────┘
-```
-
-**同源是刻意的**：前端由后端自己发，浏览器根本不发跨域请求，`ALLOWED_ORIGINS` 在生产环境不再有机会配错。本地开发不受影响——`npm run dev` 仍在 5173，`dist/` 不存在时那段挂载代码不生效。
-
-**数据目录是配置**（`storage.py`）：本地默认还写在 `backend/`，容器里通过 `DATA_DIR=/data` 落到卷上。容器自带的文件系统每次重启和每次重新部署都会清空——这是最容易静默丢数据的地方。
+**Cost**: about **EUR 8-10** for two months. Negligible compared with the EUR 230 for Prolific, but **not zero**.
 
 ---
 
-## 4. 首次部署
+## 3. Deployment structure
+
+```
++- One Fly app (fra) ---------------------+
+|  FastAPI                                |
+|   |-- /api/*        study API           |
+|   |-- /health       health check        |
+|   +-- /*            frontend dist        |
+|                     (same origin)       |
+|                                         |
+|  /data (persistent volume)              |
+|   |-- assignments.jsonl      ledger     |
+|   |-- experiment_log.jsonl   behaviour  |
+|   +-- survey_responses.jsonl answers    |
++-----------------------------------------+
+```
+
+**Same origin is deliberate**: the backend serves the frontend itself, so the browser never makes cross-origin requests and `ALLOWED_ORIGINS` cannot be misconfigured in production. Local development is unaffected: `npm run dev` still runs on 5173, and the static mount is skipped when `dist/` does not exist.
+
+**The data directory is configurable** (`storage.py`): locally it defaults to `backend/`; in the container `DATA_DIR=/data` puts it on the volume. The container's own file system is wiped on every restart and redeploy, which is the easiest way to lose data silently.
+
+---
+
+## 4. First deployment
 
 ```bash
-# 1. 安装 flyctl 并登录
+# 1. Install flyctl and log in
 fly auth login
 
-# 2. 改掉 fly.toml 里的 app 名字（它会成为 URL 的一部分，之后不能再改）
+# 2. Change the app name in fly.toml (it becomes part of the URL and cannot be changed later)
 
-# 3. 建应用与卷（卷必须和机器同区）
-fly apps create <你的应用名>
+# 3. Create the app and the volume (the volume must be in the same region as the machine)
+fly apps create <app-name>
 fly volumes create hems_data --region fra --size 1
 
-# 4. 设置研究者令牌（不设的话导出与汇总接口一律 503，是故意的）
+# 4. Set the researcher token (without it, export and summary endpoints return 503 on purpose)
 fly secrets set RESEARCHER_TOKEN=$(openssl rand -hex 24)
 
-# 5. 部署
+# 5. Deploy
 fly deploy
 
-# 6. 验活
-curl https://<你的应用名>.fly.dev/health
+# 6. Health check
+curl https://<app-name>.fly.dev/health
 ```
 
-拿到 Prolific 的 completion URL 与 code 之后，填进 `fly.toml` 的 `[build.args]` **再重新部署一次**——Vite 是在构建时把它们烤进包里的，运行时改环境变量没用。
+Once the Prolific completion URL and code are available, put them into `[build.args]` in `fly.toml` and **redeploy**. Vite bakes them into the bundle at build time; changing runtime environment variables has no effect.
 
 ---
 
-## 5. 数据备份（不是可选项）
+## 5. Data backup (not optional)
 
-服务器上是**唯一一份**数据。丢了就是实验白跑、Prolific 的钱照付。
+The server holds the **only** copy of the data. Losing it means the study has to be repeated and Prolific still has to be paid.
 
 ```bash
-set STUDY_URL=https://<你的应用名>.fly.dev
-set RESEARCHER_TOKEN=<上面生成的那个>
+set STUDY_URL=https://<app-name>.fly.dev
+set RESEARCHER_TOKEN=<the token generated above>
 python backup_study_data.py
 ```
 
-每次写一个带时间戳的新文件，**从不覆盖**——会覆盖的备份，离"没有备份"只差一次坏运行。收数期间**每天跑一次**（可以挂到工作区的计划任务里）。
+Each run writes a new timestamped file and **never overwrites**. Run it **once a day** during data collection.
 
-脚本的三个退出码：`0` 正常、`1` 失败或导出为空（多半是 URL 错或卷是新的，此时**故意不写文件**，免得留下一个看起来成功的空备份）、`2` 写了但服务器报告有损坏行——那说明数据已经在服务器上丢了，当天就要看。
-
----
-
-## 6. 上线前检查清单
-
-- [ ] `fly.toml` 里 app 名字已定，**之后不再改**
-- [ ] 卷已创建且和机器同区（`fly volumes list`）
-- [ ] `RESEARCHER_TOKEN` 已设，且 `curl .../api/export/all` 无 token 返回 401
-- [ ] Prolific completion URL / code 已填进 build args 并重新部署
-- [ ] `?PROLIFIC_PID=test123` 走一遍全流程，确认：同意书 → 三个任务 → 五页问卷 → 完成页出 code → 跳回 Prolific
-- [ ] `/api/survey/summary?token=...` 能看到那次测试的记录
-- [ ] **清空测试数据**：`backend/assignments.jsonl` 现有 7 行是 8 月的本地测试，正式开跑前必须清空，否则区组随机化从错误的计数开始
-- [ ] 备份脚本跑通一次，并已排进每日任务
-- [ ] 确认单实例：`fly scale show` 应为 1
+Exit codes: `0` success; `1` failure or empty export (usually a wrong URL or a fresh volume; **no file is written on purpose**, so that an empty backup never looks successful); `2` written, but the server reported corrupted lines, which means data has already been lost on the server and must be checked the same day.
 
 ---
 
-## 7. 已知限制（写进论文的 Limitations）
+## 6. Pre-launch checklist
 
-- **单实例即单点**。40 人的规模不需要高可用，但机器挂了实验就停。缓解手段是健康检查 + 每日备份，不是冗余。
-- **数据存成 JSONL 文件而非数据库**。样本量小、写入稀疏，这个取舍是合适的；代价是并发写入靠"只有一个进程"这个前提保证，而不是靠数据库的事务。
+- [ ] App name in `fly.toml` is final and **will not change**
+- [ ] Volume exists in the same region as the machine (`fly volumes list`)
+- [ ] `RESEARCHER_TOKEN` is set, and `curl .../api/export/all` without a token returns 401
+- [ ] Prolific completion URL / code are in the build args and the app has been redeployed
+- [ ] Run the full flow with `?PROLIFIC_PID=test123`: consent -> three tasks -> five questionnaire pages -> completion code -> redirect to Prolific
+- [ ] `/api/survey/summary?token=...` shows the test record
+- [ ] **Clear test data**: `backend/assignments.jsonl` must be emptied before launch, otherwise block randomisation starts from the wrong count
+- [ ] Backup script has run successfully once and is scheduled daily
+- [ ] Single instance confirmed: `fly scale show` should be 1
+
+---
+
+## 7. Known limitations (reported in the thesis)
+
+- **A single instance is a single point of failure.** 40 participants do not need high availability, but if the machine fails the study stops. Mitigation is a health check plus daily backups, not redundancy.
+- **Data is stored as JSONL files rather than a database.** With a small sample and sparse writes this trade-off is appropriate; the cost is that write safety relies on there being only one process rather than on database transactions.

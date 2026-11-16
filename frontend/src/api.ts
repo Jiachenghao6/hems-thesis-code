@@ -71,7 +71,7 @@ export async function createSession(prolificPid: string): Promise<SessionInfo> {
     try {
       return JSON.parse(cached) as SessionInfo;
     } catch {
-      sessionStorage.removeItem(SESSION_KEY);   // 缓存坏了就重新分，不要静默用半个对象
+      sessionStorage.removeItem(SESSION_KEY);   // if the cache is corrupt, request a new assignment instead of silently using a partial object
     }
   }
   if (sessionInFlight) return sessionInFlight;
